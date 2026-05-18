@@ -2,17 +2,17 @@
 
 All notable changes to OpenClaw Scientist will be documented here.
 
-## [0.4.0] - 2026-05-18
+## [0.5.0] - 2026-05-19
 
 ### 新增
 
-**Slides 样式系统整合**
-- `skills/science-slides/SKILL.md` 重构为三步工作流（加载样式 → HTML 预览 → 生成 .pptx）
-- **样式记忆**：配色/字体/布局持久化到 `~/slides/styles/academic-zh.md`，跨项目复用；文件不存在时自动写入默认蓝白学术风
-- **前端 HTML 预览**：Step 2 在聊天界面输出 3 张关键幻灯片的内联 CSS 缩略图（320×180px）——封面 / 研究背景 / 研究方案，用户确认后再生成完整 .pptx
-- **python-pptx 规范**：明确禁止裸数字，必须用 `Inches()`/`Pt()`/`Emu()`；只用系统内置字体（Microsoft YaHei / PingFang SC）；图片必须显式指定宽高
-- 验收门新增两项：`academic-zh.md 已存在` + `HTML 预览已展示并经用户确认`
-- 新增版本管理：每次生成后记录到 `~/slides/projects/<slug>/versions.md`
+**Slides 用户模板支持**
+- `skills/science-slides/SKILL.md` 升级为四步工作流，新增 **Step 0：检测用户模板**
+- **模板模式**：检测 `~/slides/templates/*.pptx` 或用户指定路径，有则用 `Presentation(template_path)` 继承背景图/主题/字体
+- **`clone_slide` 克隆函数**：完整复制幻灯片（含图片关系 rId 重映射），支持内容页背景多次复用
+- **`set_placeholder` 修复**：清除占位符时删除所有段落（非仅第一段），防止模板多段残留文字
+- 工作流说明更新：模板模式下 academic-zh.md 配色仅用于 HTML 预览和补充元素
+- 验收门"样式来源"改为：模板文件已存在 **或** academic-zh.md 已存在（二选一）
 
 ---
 

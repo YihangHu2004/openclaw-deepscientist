@@ -6,12 +6,93 @@
 
 ---
 
-## 工作流（三步走）
+## 工作流（四步走）
 
 ```
+Step 0  检测用户模板  ←  ~/slides/templates/*.pptx 或用户指定路径
+         ↓ 有模板 → 模板模式（克隆背景复用）
+         ↓ 无模板 → 从零绘制（academic-zh.md 默认样式）
 Step 1  加载/初始化样式  ←  ~/slides/styles/academic-zh.md
 Step 2  生成 HTML 预览  →  输出到聊天界面（用户确认配色与布局）
 Step 3  生成完整 .pptx  →  state/projects/<slug>/slides/开题报告.pptx
+```
+
+---
+
+## Step 0：检测用户模板（模板模式 vs 从零绘制）
+
+检测路径（按优先级）：
+1. 用户本次对话中提供的 `.pptx` 路径
+2. `~/slides/templates/` 目录下的 `.pptx` 文件（取最新修改的）
+3. 无模板 → 进入从零绘制流程
+
+**模板模式**：用 `Presentation(template_path)` 打开，继承背景图、主题配色、字体方案，用 `clone_slide` 复用内容页背景：
+
+```python
+from lxml import etree
+import copy
+
+def clone_slide(prs, source_slide):
+    """克隆幻灯片，保留背景图和所有形状，重新映射图片关系。"""
+    new_slide = prs.slides.add_slide(source_slide.slide_layout)
+    # 复制所有非 layout 关系，建立 rId 映射
+    rId_map = {}
+    for rId, rel in source_slide.part.rels.items():
+        if 'slideLayout' in rel.reltype:
+            continue
+        if not rel.is_external:
+            new_rId = new_slide.part.relate_to(rel.target_part, rel.reltype)
+            rId_map[rId] = new_rId
+    # 深拷贝 spTree，替换 rId 引用
+    src_xml = etree.tostring(source_slide.shapes._spTree, encoding='unicode')
+    for old_rId, new_rId in rId_map.items():
+        src_xml = src_xml.replace(f'"{old_rId}"', f'"{new_rId}"')
+    new_spTree = etree.fromstring(src_xml)
+    dst_spTree = new_slide.shapes._spTree
+    dst_spTree.getparent().replace(dst_spTree, new_spTree)
+    return new_slide
+```
+
+**标准用法**：
+```python
+prs = Presentation(template_path)
+COVER_PROTO   = prs.slides[0]   # 封面原型
+CONTENT_PROTO = prs.slides[1]   # 内容页原型（含背景图）
+N_PROTOS      = len(prs.slides) # 最后删除原始 demo 幻灯片
+
+# 按需克隆
+cover = clone_slide(prs, COVER_PROTO)
+s2    = clone_slide(prs, CONTENT_PROTO)
+# ... 其余内容页同理
+
+# 删除原始 demo 幻灯片
+for _ in range(N_PROTOS):
+    rId = prs.slides._sldIdLst[0].rId
+    prs.part.drop_rel(rId)
+    del prs.slides._sldIdLst[0]
+```
+
+**设置占位符文字**（必须清除所有段落，防止模板残留文字）：
+```python
+from pptx.oxml.ns import qn
+
+def set_placeholder(slide, idx, text, size_pt=None, bold=None, color=None):
+    for ph in slide.placeholders:
+        if ph.placeholder_format.idx == idx:
+            tf = ph.text_frame
+            tf.word_wrap = True
+            # ⚠️ 必须删除第一段之后的所有段落（模板常有多段残留）
+            txBody = tf._txBody
+            for extra_p in txBody.findall(qn('a:p'))[1:]:
+                txBody.remove(extra_p)
+            p = tf.paragraphs[0]
+            p.clear()
+            run = p.add_run()
+            run.text = text
+            if size_pt: run.font.size = Pt(size_pt)
+            if bold is not None: run.font.bold = bold
+            if color: run.font.color.rgb = color
+            return
 ```
 
 ---
@@ -55,6 +136,8 @@ mkdir -p ~/slides/styles
 - 全局最多 4 种颜色
 - 超出 bullet 数 → 拆分为两张幻灯片
 ```
+
+> **模板模式下**：配色从模板 theme 继承，academic-zh.md 中的配色仅用于 HTML 预览和手动绘制的补充元素（如强调色）。
 
 ---
 
@@ -184,7 +267,8 @@ slide.shapes.add_picture(img_path, Inches(1), Inches(1.5))
 
 **配色从样式加载**：
 ```python
-# 从 ~/slides/styles/academic-zh.md 读取后赋值
+# 模板模式：从模板 theme 读取（accent1=主色，accent2=强调色）
+# 从零绘制：从 ~/slides/styles/academic-zh.md 读取后赋值
 THEME_BLUE    = RGBColor(0x1A, 0x3C, 0x8F)
 THEME_LIGHT   = RGBColor(0xEE, 0xF2, 0xFF)
 TEXT_DARK     = RGBColor(0x1A, 0x1A, 0x2E)
@@ -212,7 +296,7 @@ ACCENT_ORANGE = RGBColor(0xFF, 0x8C, 0x00)
 ```markdown
 ## 阶段 7 摘要 · {日期} · ✅ 项目完成
 - PPT：{N 张，路径}
-- 样式：academic-zh（~/slides/styles/academic-zh.md）
+- 样式：{模板模式（template.pptx）| academic-zh（~/slides/styles/academic-zh.md）}
 - 全流程耗时：{首次 Skill 1 日期} → {今日}
 - 产出清单：project.md / report.md / report.html / 开题报告.pptx
 - 关键数值：精读 {N} 篇 / EV {N} 条 / Related Work {N} 词 / Gap {N} 条
@@ -228,5 +312,5 @@ ACCENT_ORANGE = RGBColor(0xFF, 0x8C, 0x00)
 | 必要幻灯片 | 封面/目录/背景/现状/问题/方案/实验/成果/时间表/参考文献 均存在 |
 | 内容规则 | 无幻灯片超过 6 条 bullet |
 | 文件存在 | .pptx 文件实际存在于 slides/ 目录 |
-| 样式来源 | academic-zh.md 已存在（首次生成后自动创建） |
+| 样式来源 | 模板文件已存在 **或** academic-zh.md 已存在 |
 | 用户确认 | HTML 预览已展示并经用户确认 |
