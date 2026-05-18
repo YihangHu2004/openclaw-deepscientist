@@ -1,0 +1,38 @@
+{
+  "name": "@your-github/openclaw-scientist",
+  "version": "0.1.0",
+  "description": "OpenClaw Scientist Agent — 深度科研文献搜索、证据链追踪与开题 PPT 生成",
+  "keywords": ["openclaw", "research", "llm", "academic", "arxiv"],
+  "license": "MIT",
+  "bin": {
+    "openclaw-scientist": "./cli.js"
+  },
+  "files": [
+    "SCIENTIST.md",
+    "SOUL.md",
+    "AGENTS.md",
+    "TOOLS.md",
+    "HEARTBEAT.md",
+    "USER_CONFIG.example.md",
+    "MEMORY.template.md",
+    "skills/",
+    "state/.gitkeep",
+    "memory/.gitkeep",
+    "install.sh",
+    "cli.js",
+    "openclaw.plugin.json"
+  ],
+  "scripts": {
+    "postinstall": "node cli.js --auto-register"
+  },
+  "openclaw": {
+    "install": {
+      "npmSpec": "@your-github/openclaw-scientist",
+      "minHostVersion": ">=2026.1.0"
+    },
+    "release": {
+      "publishToNpm": false,
+      "publishToClawHub": false
+    }
+  }
+}

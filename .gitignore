@@ -1,0 +1,33 @@
+# ═══ 个人配置（绝不入 Git）════════════════════════
+USER_CONFIG.md
+MEMORY.md
+memory/*
+!memory/.gitkeep
+
+# ═══ 研究数据（本地私有，永不上传）══════════════
+state/projects/*/
+!state/projects/.gitkeep
+
+# ═══ 所有生成文件（报告、PPT、HTML）══════════════
+state/**/*.html
+state/**/*.pptx
+state/**/*.pdf
+state/**/*.json
+state/**/*.md
+!state/projects/.gitkeep
+
+# ═══ API 密钥 / 认证════════════════════════════
+.env
+credentials/
+*.token
+openclaw.json
+
+# ═══ OpenClaw 运行时（自动生成）══════════════
+.openclaw/
+
+# ═══ Python / 系统════════════════════════════
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+Thumbs.db

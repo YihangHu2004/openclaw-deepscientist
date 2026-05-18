@@ -1,0 +1,28 @@
+{
+  "id": "scientist",
+  "name": "OpenClaw Scientist",
+  "version": "0.1.0",
+  "description": "深度科研 Agent：文献漏斗 + 证据链 + 双模式流水线 + 开题 PPT",
+  "author": "your-github-username",
+  "license": "MIT",
+  "agent": {
+    "id": "scientist",
+    "model": "deepseek/deepseek-v4-pro",
+    "workspace": "${OPENCLAW_DIR}/workspace-scientist"
+  },
+  "requires": {
+    "openclaw_version": ">=2026.1.0",
+    "python_packages": ["trafilatura", "python-pptx", "markdown"]
+  },
+  "user_config": {
+    "file": "USER_CONFIG.md",
+    "template": "USER_CONFIG.example.md",
+    "required_fields": ["邮箱", "称呼"]
+  },
+  "install_script": "install.sh",
+  "clawhub": {
+    "channel": "community",
+    "publishToNpm": false,
+    "publishToClawHub": false
+  }
+}
