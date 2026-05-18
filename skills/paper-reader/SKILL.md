@@ -33,6 +33,26 @@ for table in soup.find_all('table'):
 
 ---
 
+## 反幻觉协议（Anti-Leakage）
+
+精读时遇到**无法从当前文献中验证的信息**，必须打 `[MATERIAL GAP]` 标签，禁止从训练记忆静默填充：
+
+```markdown
+### 实验设置
+- 数据集：SQuAD 2.0（10 万条问题） [EV-012]
+- 基线方法：[MATERIAL GAP: 论文未说明使用了哪些 baseline，全文截断区间内]
+- 评估指标：F1 / EM [EV-013]
+```
+
+**打标触发条件**：
+- 该字段在可访问全文中找不到对应内容
+- 全文被截断，所需内容在省略区间
+- 只能从摘要推断，但推断较强
+
+每篇笔记的 `[MATERIAL GAP]` 数量记录在 SUMMARY.md 阶段 3 摘要的 `gap_count` 字段。
+
+---
+
 ## 证据提取（精读时同步写入 evidence.json）
 
 每个关键发现/方法/指标提取一条 EV 记录，按获取方式设置 confidence：
@@ -88,3 +108,4 @@ for table in soup.find_all('table'):
 | EV 记录 | evidence.json 中每篇 ≥ 2 条 EV，共 ≥ 10 条 |
 | EV 来源 | EV 记录 source_type 不得全为 abstract_only |
 | EV 验证 | verified = true（来自实际抓取，非内存重建） |
+| [MATERIAL GAP] | 每篇笔记中标注数量记入 SUMMARY.md gap_count |

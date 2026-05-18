@@ -6,12 +6,22 @@
 
 ---
 
-## 写作前证据预审
+## 写作前证据预审（Sprint Contract）
 
-在写作前先检查 evidence.json：
+**先写预承诺评分标准，再动笔（预承诺后不得修改标准）**：
+```markdown
+## 报告质量预承诺 · {日期}
+- EV 覆盖率目标：≥ 80%
+- [MATERIAL GAP] 上限：≤ 总结论句数 20%
+- 各章节 EV 最低数：Intro ≥ 2 / Related Work ≥ 5 / Methodology ≥ 2 / Experiment ≥ 2
+- 不合格处理：返回精读，不降低标准
+```
+
+然后检查 evidence.json：
 1. verified=true 的 EV 总数是否 ≥ 10
-2. 各章节（Introduction / Related Work / Methodology / Experiment）各有 ≥ 2 条 EV 支撑
-3. 覆盖率不足时 → 返回 paper-reader 补充精读，或标注"证据不足"降级
+2. 各章节各有 ≥ 2 条 EV 支撑
+3. 统计已有 `[MATERIAL GAP]` 数量，超过 20% 则先返回 paper-reader 补充
+4. 覆盖率不足时 → 返回精读补充，或标注"证据不足"降级
 
 ---
 
@@ -32,7 +42,7 @@
 ## 8. References（APA 格式，来自论文库）
 ```
 
-每个含文献结论的句子后附 `[EV-xxx]`；无证据支撑的声明必须改写或删除。
+每个含文献结论的句子后附 `[EV-xxx]`；无证据支撑的声明必须改写或打 `[MATERIAL GAP]` 标签，不得删除信息缺口。
 
 ---
 
@@ -81,3 +91,5 @@ print("report.html 已生成")
 | EV 位置记录 | evidence.json 中所有 EV 的 claim_location 已填写 |
 | 报告字数 | ≥ 1000 词 |
 | 文件存在 | report.md + report.html 均存在 |
+| [MATERIAL GAP] 上限 | ≤ 总结论句数的 20% |
+| 预承诺记录 | 报告质量预承诺已写入 report.md 头部 |

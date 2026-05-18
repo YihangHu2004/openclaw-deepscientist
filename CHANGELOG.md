@@ -2,6 +2,78 @@
 
 All notable changes to OpenClaw Scientist will be documented here.
 
+## [0.6.0] - 2026-05-19
+
+### 新增
+
+**两个质量保障 Skill（移植自 Imbad0202/academic-research-skills）**
+
+- **Skill 8 · `claim-auditor`（引用忠实度审计）** — `skills/claim-auditor/SKILL.md`
+  - 4 步流程：抽样（all high + 30% medium EV）→ 取回原文 → 逐条核查 → 输出审计报告
+  - 判定三档：`faithful`（忠实）/ `drifted`（漂移，须给修改建议）/ `unsupported`（无根据，必须修改）
+  - 结果追加到 `report.md` 附录，同步更新 `evidence.json` 的 `audit_result` 字段
+  - 验收门：high EV 全查、medium 抽查 ≥30%、unsupported 项已修、审计报告已追加
+
+- **Skill 9 · `paper-reviewer`（双流同行评审）** — `skills/paper-reviewer/SKILL.md`
+  - 5 人评审团：评审 A（主题专家）/ B（方法专家）/ C（写作审稿人）/ D（领域外视角）+ Devil's Advocate
+  - **Sprint Contract 预承诺**：每位评审在阅读报告前写下评分标准，防止后验合理化
+  - 标准评分卡（A/B/C/D）：研究贡献 / 方法合理性 / 证据质量 / 可复现性（各 1-5 分）
+  - **DA 独立框架**：竞争性解释 / 逻辑漏洞 / 被忽视的对立文献 / DA 裁决（🔴 DA-CRITICAL 阻断 / 🟡 DA-WARNING）
+  - 共识汇总：CONSENSUS-4 / CONSENSUS-3 / SPLIT / DA-CRITICAL 四级
+  - 输出路径：`state/projects/<slug>/review/peer_review_{日期}.md`
+
+**SCIENTIST.md 核心协议升级（§1.6–§1.9）**
+
+- **§1.6 · 自适应检查点（Adaptive Checkpoints）**（移植）
+  - 三级检查点：FULL（全量审核）/ SLIM（轻量确认）/ MANDATORY（不可跳过）
+  - `consecutive_confirms` 计数器：连续 2 次 FULL 无新信息自动降为 SLIM
+  - MANDATORY 检查点（研究方向选择、报告完成）永不降级
+
+- **§1.7 · [MATERIAL GAP] 防泄露协议**（移植）
+  - 当信息无法从文献验证时，必须显式标注 `[MATERIAL GAP]` 而非静默生成
+  - 追踪 `gap_count` 和总结论句数，比例超 20% 须返回精读补充
+  - 验收门新增条件：[MATERIAL GAP] 比例 ≤ 20%
+
+- **§1.8 · 物料护照（Material Passport）**（移植）
+  - `pipeline_state.json` 新增 `material_passport` 数组，记录每条产出的 `content_hash`（SHA256）
+  - 防止跨阶段"偷换物料"——每个阶段引用上游产出必须与哈希匹配
+  - 格式：`{ artifact, stage, hash_sha256, timestamp, gate_status }`
+
+- **§1.9 · 模式谱与 Socratic 对话架构**（移植）
+  - 模式谱表格：每个 Skill 的忠实度 vs 独创性定位（S1-S7）
+  - 5 层 Socratic 对话（澄清 → 假设探测 → 证据推理 → 观点 → 推论）
+  - 收敛条件：用户明确选择 / 连续 2 轮无新信息 / 用户主动要求计划
+
+### 更新
+
+**现有 Skill 强化（移植）**
+
+- **paper-reader (S3)**：新增「防泄露协议」节
+  - 禁止从训练记忆填充论文内容；只能使用 `web_fetch` 实际获取的文本
+  - [MATERIAL GAP] 标注示例 + 审计触发流程
+  - 追踪 `gap_count`，写入 SUMMARY.md 阶段 3 摘要
+
+- **literature-synthesis (S4)**：新增「Step 6：Sprint Contract 预承诺」
+  - 综述草稿开始前写下合格标准（EV 密度 / Gap 数量 / 对比表行数 / [MATERIAL GAP] 上限）
+  - 预承诺写入 `project.md` 头部，完成后按标准核查，不得事后修改
+
+- **research-planner (S5)**：新增「Socratic 对话引导」（5 层表格）
+  - 意图模糊时优先进入对话引导，而非直接输出计划
+  - 收敛后进入 PLANNER-EXECUTOR 微架构
+
+- **report-writer (S6)**：新增「写作前证据预审（Sprint Contract）」
+  - 先写预承诺评分标准（EV 覆盖率目标 / [MATERIAL GAP] 上限 / 各章节 EV 最低数）
+  - 无证据支撑的声明必须改写或打 `[MATERIAL GAP]`，不得删除信息缺口
+  - 验收门新增两条：[MATERIAL GAP] ≤ 20%、预承诺记录已写入报告头部
+
+### SKILL_REGISTRY.md
+
+- 从单行指针扩展为完整索引表（含 S1-S9 所有 Skill）
+- 新增「质量保障 Skill」分类（S8/S9）
+- 补充 DA-CRITICAL 阻断规则说明
+
+---
+
 ## [0.5.0] - 2026-05-19
 
 ### 新增
