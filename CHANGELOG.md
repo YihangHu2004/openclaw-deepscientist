@@ -2,6 +2,38 @@
 
 All notable changes to OpenClaw Scientist will be documented here.
 
+## [0.2.0] - 2026-05-18
+
+### 新增（借鉴 DeepScientist + ResearStudio）
+
+**DS-1：SUMMARY.md 阶段摘要**
+- 每个 Skill（S1-S7）完成后自动追加一条结构化摘要到 `SUMMARY.md`
+- 内容包含：产出统计 / 关键数值 / 核心发现，供跨会话快速恢复上下文
+- S7 写入最终项目完成摘要（含全流程产出清单）
+
+**DS-3：全局基线注册表（baselines.json）**
+- 新增 `state/baselines.json`：跨项目积累数据集与基线方法（schema 见 Part III）
+- Skill 5 规划时先查注册表，命中则复用，未命中则搜索后写入
+- §1.4 新增注册表格式说明；§1.2 项目目录新增全局文件引用
+
+**RS-1：论文表格与图注专项提取**
+- Skill 3 精读时，在 Trafilatura 提取完主文本后，额外用 BeautifulSoup 提取全部 `<table>` → Markdown 表格
+- 同步提取 `<figcaption>` 图注（标题 + 位置说明）
+- 表格数据优先用于 Skill 4 方法对比表；EV 引用表格数据时 claim_location 注明 "Table N"
+
+**RS-2：Gap 子问题分解**
+- Skill 5 研究计划模板新增「Gap 子问题分解」节
+- 每个 Research Gap 转化为 N 条可证伪子问题（可用实验数值回答 yes/no）
+- 子问题写入 SUMMARY.md 阶段 5 摘要，方便团队对齐研究目标
+
+**RS-3：EV 置信度分级（confidence）**
+- evidence.json 每条记录新增 `confidence` 字段：`high` / `medium` / `low`
+- 按获取方式自动设定：全文实验数据 → high；截断全文 → medium；摘要 → low
+- Skill 4 综述规则：核心数值声明须有 ≥1 条 high EV；low EV 引用须加注"待全文确认"
+- Skill 3 提取规则新增置信度设置对照表
+
+---
+
 ## [0.1.0] - 2026-05-18
 
 ### 初始版本
