@@ -26,6 +26,28 @@ Step 3  生成完整 .pptx  →  state/projects/<slug>/slides/开题报告.pptx
 2. `~/slides/templates/` 目录下的 `.pptx` 文件（取最新修改的）
 3. 无模板 → 进入从零绘制流程
 
+**模板缓存**：检测到模板后，立即复制到项目目录：
+```python
+import shutil, os
+
+CACHE_PATH = f"state/projects/{slug}/slides/template_cache.pptx"
+os.makedirs(os.path.dirname(CACHE_PATH), exist_ok=True)
+
+if not os.path.exists(CACHE_PATH):
+    shutil.copy2(template_path, CACHE_PATH)
+    print(f"模板已缓存：{CACHE_PATH}")
+else:
+    print(f"使用已缓存模板：{CACHE_PATH}")
+
+# 后续所有操作均从 CACHE_PATH 读取，不再依赖原始路径
+template_path = CACHE_PATH
+```
+
+缓存规则：
+- 同一项目首次使用时复制，之后复用缓存（即使原始文件被删除或移动）
+- 用户更换模板时需显式说明 → 覆盖缓存后重新生成
+- 缓存文件名固定为 `template_cache.pptx`，不含原始文件名（避免路径中文或空格问题）
+
 **模板模式**：用 `Presentation(template_path)` 打开，继承背景图、主题配色、字体方案，用 `clone_slide` 复用内容页背景：
 
 ```python
