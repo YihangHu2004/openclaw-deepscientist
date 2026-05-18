@@ -2,6 +2,20 @@
 
 All notable changes to OpenClaw Scientist will be documented here.
 
+## [0.4.0] - 2026-05-18
+
+### 新增
+
+**Slides 样式系统整合**
+- `skills/science-slides/SKILL.md` 重构为三步工作流（加载样式 → HTML 预览 → 生成 .pptx）
+- **样式记忆**：配色/字体/布局持久化到 `~/slides/styles/academic-zh.md`，跨项目复用；文件不存在时自动写入默认蓝白学术风
+- **前端 HTML 预览**：Step 2 在聊天界面输出 3 张关键幻灯片的内联 CSS 缩略图（320×180px）——封面 / 研究背景 / 研究方案，用户确认后再生成完整 .pptx
+- **python-pptx 规范**：明确禁止裸数字，必须用 `Inches()`/`Pt()`/`Emu()`；只用系统内置字体（Microsoft YaHei / PingFang SC）；图片必须显式指定宽高
+- 验收门新增两项：`academic-zh.md 已存在` + `HTML 预览已展示并经用户确认`
+- 新增版本管理：每次生成后记录到 `~/slides/projects/<slug>/versions.md`
+
+---
+
 ## [0.3.0] - 2026-05-18
 
 ### 重构

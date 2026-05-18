@@ -6,7 +6,135 @@
 
 ---
 
-## 标准结构（12-15 张）
+## 工作流（三步走）
+
+```
+Step 1  加载/初始化样式  ←  ~/slides/styles/academic-zh.md
+Step 2  生成 HTML 预览  →  输出到聊天界面（用户确认配色与布局）
+Step 3  生成完整 .pptx  →  state/projects/<slug>/slides/开题报告.pptx
+```
+
+---
+
+## Step 1：样式加载
+
+读取 `~/slides/styles/academic-zh.md`：
+- **文件存在** → 加载其中的配色、字体、布局参数，覆盖以下默认值
+- **文件不存在** → 用默认值生成该文件，并告知用户可修改
+
+```bash
+mkdir -p ~/slides/styles
+```
+
+### 默认样式（写入 `~/slides/styles/academic-zh.md`）
+
+```markdown
+# 学术中文 PPT 样式 · academic-zh
+
+## 配色
+- 主色（标题背景）: #1A3C8F
+- 浅色（内容背景）: #EEF2FF
+- 正文色: #1A1A2E
+- 白字: #FFFFFF
+- 强调色: #FF8C00
+
+## 字体
+- 标题: Microsoft YaHei Bold（备选 SimHei），32-40pt
+- 正文: Microsoft YaHei（备选 SimSun），18-24pt
+- 英文: Calibri（备选 Arial）
+- 只用系统内置字体，禁止依赖嵌入字体
+
+## 布局
+- 尺寸: 13.33 × 7.5 英寸（16:9）
+- 标题栏高度: 1.3 英寸
+- 内容区左边距: 0.6 英寸，右边距: 0.6 英寸
+- 内容区上边距: 1.6 英寸
+
+## 规则
+- 最多 6 条 bullet，每条 ≤ 20 汉字（6×6 原则）
+- 全局最多 4 种颜色
+- 超出 bullet 数 → 拆分为两张幻灯片
+```
+
+---
+
+## Step 2：HTML 预览（输出到聊天界面）
+
+**在生成 .pptx 之前**，先向聊天界面输出 3 张关键幻灯片的 HTML 缩略图预览：
+封面 / 研究背景 / 研究方案。用户确认样式后再生成完整 PPT。
+
+使用以下模板，将样式参数替换为实际值后，直接在回复中输出：
+
+```html
+<div style="display:flex;gap:12px;flex-wrap:wrap;margin:12px 0;font-family:'Microsoft YaHei',Arial,sans-serif">
+
+  <!-- 幻灯片 1：封面 -->
+  <div style="width:320px;height:180px;background:#1A3C8F;border-radius:6px;
+              display:flex;flex-direction:column;justify-content:center;
+              align-items:center;padding:20px;box-sizing:border-box;position:relative">
+    <div style="color:#FF8C00;font-size:11px;letter-spacing:2px;margin-bottom:8px">开题报告</div>
+    <div style="color:#fff;font-size:15px;font-weight:bold;text-align:center;line-height:1.4">
+      {研究主题标题}
+    </div>
+    <div style="color:#EEF2FF;font-size:10px;margin-top:12px">{姓名} · {机构} · {日期}</div>
+    <div style="position:absolute;bottom:8px;right:10px;color:#ffffff44;font-size:9px">1 / N</div>
+  </div>
+
+  <!-- 幻灯片 3：研究背景 -->
+  <div style="width:320px;height:180px;background:#EEF2FF;border-radius:6px;
+              overflow:hidden;position:relative">
+    <div style="background:#1A3C8F;height:36px;display:flex;align-items:center;padding:0 14px">
+      <span style="color:#fff;font-weight:bold;font-size:13px">研究背景与动机</span>
+    </div>
+    <div style="padding:10px 14px">
+      <div style="color:#1A1A2E;font-size:10px;line-height:1.8">
+        <div>▸ {背景要点 1，≤ 20 汉字}</div>
+        <div>▸ {背景要点 2，≤ 20 汉字}</div>
+        <div>▸ {背景要点 3，≤ 20 汉字}</div>
+        <div style="color:#FF8C00;margin-top:6px;font-weight:bold">▸ {核心痛点/动机}</div>
+      </div>
+    </div>
+    <div style="position:absolute;bottom:8px;right:10px;color:#1A3C8F66;font-size:9px">3 / N</div>
+  </div>
+
+  <!-- 幻灯片 7：研究方案 -->
+  <div style="width:320px;height:180px;background:#EEF2FF;border-radius:6px;
+              overflow:hidden;position:relative">
+    <div style="background:#1A3C8F;height:36px;display:flex;align-items:center;padding:0 14px">
+      <span style="color:#fff;font-weight:bold;font-size:13px">研究方案</span>
+    </div>
+    <div style="padding:10px 14px;display:flex;gap:10px">
+      <div style="flex:1;background:#fff;border-radius:4px;padding:8px;font-size:9px;color:#1A1A2E;line-height:1.6">
+        <div style="color:#1A3C8F;font-weight:bold;margin-bottom:4px">方法</div>
+        <div>{方法要点 1}</div>
+        <div>{方法要点 2}</div>
+      </div>
+      <div style="flex:1;background:#fff;border-radius:4px;padding:8px;font-size:9px;color:#1A1A2E;line-height:1.6">
+        <div style="color:#FF8C00;font-weight:bold;margin-bottom:4px">创新点</div>
+        <div>{创新点 1}</div>
+        <div>{创新点 2}</div>
+      </div>
+    </div>
+    <div style="position:absolute;bottom:8px;right:10px;color:#1A3C8F66;font-size:9px">7 / N</div>
+  </div>
+
+</div>
+<p style="color:#666;font-size:12px;margin:4px 0">
+  📐 以上为样式预览（蓝白学术风 · academic-zh）。
+  如需调整配色/字体，请修改 <code>~/slides/styles/academic-zh.md</code> 后告知，或直接说明改动。
+  确认后生成完整 .pptx。
+</p>
+```
+
+**等待用户确认**后再进入 Step 3。若用户提出修改：
+- 配色/字体改动 → 更新 `~/slides/styles/academic-zh.md` → 重新输出预览
+- 内容改动 → 直接进入 Step 3 按新内容生成
+
+---
+
+## Step 3：生成完整 .pptx
+
+### 标准结构（12-15 张）
 
 | # | 幻灯片 | 内容来源 |
 |---|--------|---------|
@@ -21,23 +149,60 @@
 | 11 | 研究时间表（甘特图） | report.md §7 |
 | 12 | 参考文献（核心 8-12 篇）| 论文库 |
 
----
+### python-pptx 代码规范
 
-## 配色方案（蓝白学术风）
-
+**单位**：必须用 `pptx.util` 的具名单位，禁止裸数字：
 ```python
-THEME_BLUE    = RGBColor(0x1A, 0x3C, 0x8F)  # 标题背景
-THEME_LIGHT   = RGBColor(0xEE, 0xF2, 0xFF)  # 内容背景
-TEXT_DARK     = RGBColor(0x1A, 0x1A, 0x2E)  # 正文
-TEXT_WHITE    = RGBColor(0xFF, 0xFF, 0xFF)  # 白字
-ACCENT_ORANGE = RGBColor(0xFF, 0x8C, 0x00)  # 强调色
+from pptx.util import Inches, Pt, Emu
+from pptx.dml.color import RGBColor
+
+# ✅ 正确
+tf.width = Inches(6.0)
+tf.font.size = Pt(24)
+
+# ❌ 错误（裸数字会被解释为 EMU，产生极小/极大尺寸）
+tf.width = 6
+tf.font.size = 24
 ```
 
-幻灯片尺寸：`13.33 × 7.5 英寸`（16:9 宽屏）
+**字体**：只用系统内置字体（参考 `~/slides/styles/academic-zh.md`）：
+```python
+# ✅ 安全
+run.font.name = "Microsoft YaHei"    # Windows
+run.font.name = "PingFang SC"        # macOS
+# ❌ 不安全（需嵌入字体才能在其他机器正常显示）
+run.font.name = "Noto Sans CJK SC"
+```
 
-**内容规则（6×6）**：每张最多 6 条 bullet，每条不超过 20 汉字；超出则拆分为两张。
+**图片**：必须显式指定尺寸，禁止依赖自动适应：
+```python
+# ✅ 正确
+slide.shapes.add_picture(img_path, Inches(1), Inches(1.5), width=Inches(4))
+# ❌ 错误（auto-fit 经常失效）
+slide.shapes.add_picture(img_path, Inches(1), Inches(1.5))
+```
 
-**甘特图**：用矩形块（`add_shape`）表示各阶段，不依赖外部图表库。
+**配色从样式加载**：
+```python
+# 从 ~/slides/styles/academic-zh.md 读取后赋值
+THEME_BLUE    = RGBColor(0x1A, 0x3C, 0x8F)
+THEME_LIGHT   = RGBColor(0xEE, 0xF2, 0xFF)
+TEXT_DARK     = RGBColor(0x1A, 0x1A, 0x2E)
+TEXT_WHITE    = RGBColor(0xFF, 0xFF, 0xFF)
+ACCENT_ORANGE = RGBColor(0xFF, 0x8C, 0x00)
+```
+
+**甘特图**：用 `add_shape(MSO_SHAPE_TYPE.RECTANGLE)` 绘制，不依赖外部图表库。
+
+### 版本管理
+
+每次生成后记录到 `~/slides/projects/<slug>/versions.md`：
+```markdown
+## v{N} · {日期}
+- 幻灯片数：{N} 张
+- 主要变化：{初始生成 / 修改 X 处}
+- 文件：{路径}
+```
 
 **输出路径**：`state/projects/<slug>/slides/开题报告.pptx`
 
@@ -47,6 +212,7 @@ ACCENT_ORANGE = RGBColor(0xFF, 0x8C, 0x00)  # 强调色
 ```markdown
 ## 阶段 7 摘要 · {日期} · ✅ 项目完成
 - PPT：{N 张，路径}
+- 样式：academic-zh（~/slides/styles/academic-zh.md）
 - 全流程耗时：{首次 Skill 1 日期} → {今日}
 - 产出清单：project.md / report.md / report.html / 开题报告.pptx
 - 关键数值：精读 {N} 篇 / EV {N} 条 / Related Work {N} 词 / Gap {N} 条
@@ -62,3 +228,5 @@ ACCENT_ORANGE = RGBColor(0xFF, 0x8C, 0x00)  # 强调色
 | 必要幻灯片 | 封面/目录/背景/现状/问题/方案/实验/成果/时间表/参考文献 均存在 |
 | 内容规则 | 无幻灯片超过 6 条 bullet |
 | 文件存在 | .pptx 文件实际存在于 slides/ 目录 |
+| 样式来源 | academic-zh.md 已存在（首次生成后自动创建） |
+| 用户确认 | HTML 预览已展示并经用户确认 |
