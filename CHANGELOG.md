@@ -2,6 +2,23 @@
 
 All notable changes to OpenClaw Scientist will be documented here.
 
+## [0.3.0] - 2026-05-18
+
+### 重构
+
+**Skill 分拆**
+- `SCIENTIST.md` Part II 从 1000+ 行缩减至 531 行，只保留流程图与 7 行概览表
+- 7 个 Skill 的完整规格各自迁移至独立文件 `skills/<name>/SKILL.md`：
+  - `skills/arxiv-search/SKILL.md` — 搜索流程、Triage、停止信号、异议搜索、文献覆盖门
+  - `skills/semantic-scholar/SKILL.md` — S2 端点、Triage 集成、速率限制
+  - `skills/paper-reader/SKILL.md` — 全文获取策略、表格提取、EV 置信度规则、精读完整门
+  - `skills/literature-synthesis/SKILL.md` — Related Work、对比表、Gap 列表、confidence 规则、综述质量门
+  - `skills/research-planner/SKILL.md` — 基线注册表查询、子问题分解、计划模板、研究计划门
+  - `skills/report-writer/SKILL.md` — 证据预审、HTML 生成脚本、报告完整门
+  - `skills/science-slides/SKILL.md` — PPT 结构、配色方案、甘特图规则、PPT 结构门
+
+---
+
 ## [0.2.0] - 2026-05-18
 
 ### 新增（借鉴 DeepScientist + ResearStudio）
