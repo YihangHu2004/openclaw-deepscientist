@@ -2,6 +2,33 @@
 
 All notable changes to OpenClaw Scientist will be documented here.
 
+## [0.8.0] - 2026-05-19
+
+### 新增：MCP 工具层 + 数学分析 Skill
+
+**MCP Server 集成（`~/.openclaw/openclaw.json`）**
+
+- **`math`**（stdio）：基础算术 MCP server（add / sub / multiply / divide / round），来自 ResearStudio
+- **`wolfram`**（stdio）：Wolfram|Alpha LLM API 接入，App ID `Q98VV64QX4`
+  - `wolfram_query`：自然语言问答（积分 / 方程 / 单位换算等）
+  - `wolfram_full`：返回完整分步推导（max_pods 可调）
+  - `wolfram_check_equation`：验证两个表达式是否等价
+  - 入口：`ResearStudio/agent/server/wolfram_tool.py`
+- **`academic-write`**（SSE）：学术文本润色 / 语法优化 / 中英互译
+- **`academic-search`**（SSE）：语义学术网页搜索
+- **`academic-chart`**（SSE）：图表生成，支持 10+ 类型（柱 / 折线 / 饼 / 雷达 / 散点 / 气泡等）
+- **`academic-formatter`**（SSE）：工具输出转 HTML / Markdown
+- 后四个 server 来自 [AcademicAgentsStudio/Academic-Free-MCP-Servers](https://github.com/AcademicAgentsStudio/Academic-Free-MCP-Servers)，免费学术授权，token `aioagi.tech`
+
+**新增 Companion Skill：`math-analysis`**（`skills/math-analysis/SKILL.md`）
+
+- 工具选择路由表：Wolfram MCP（自然语言优先）vs exec + Python（精确数值重现）
+- A. 统计验证：Welch's t 检验 / 比例检验，从汇总统计重现论文 p 值
+- B. 效应量：Cohen's d / 相对提升，判断实际显著性（不只看 p 值）
+- C. 符号数学：SymPy 化简 / 求导 / 积分 / 极限 / 等式验证
+
+---
+
 ## [0.7.0] - 2026-05-19
 
 ### 新增：执行层（Execution Layer）

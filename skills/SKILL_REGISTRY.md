@@ -25,6 +25,12 @@
 | S8 | claim-auditor | [skills/claim-auditor/SKILL.md](claim-auditor/SKILL.md) | 引用忠实度审计：核查 EV claim_text 是否忠实于 original_text | report.md 完成后；DA 要求验证时 |
 | S9 | paper-reviewer | [skills/paper-reviewer/SKILL.md](paper-reviewer/SKILL.md) | 双流同行评审：4 位标准评审 + Devil's Advocate | S8 通过后；或用户请求批判性反馈时 |
 
+## Companion Skill（随时可用）
+
+| Skill ID | 文件 | 职责 | 典型触发时机 |
+|----------|------|------|------------|
+| math-analysis | [skills/math-analysis/SKILL.md](math-analysis/SKILL.md) | 统计验证 / 效应量 / 符号数学（numpy/scipy/sympy） | LLM 判断需要定量验证或数学推导时 |
+
 ---
 
 ## 调用说明
