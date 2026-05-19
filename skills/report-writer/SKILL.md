@@ -31,15 +31,15 @@
 # [研究主题] 科研报告
 作者：{USER_NAME} | 机构：{USER_INSTITUTION} | 日期：{YYYY-MM-DD}
 
-## Abstract（100-150 词英文）
-## 1. Introduction
-## 2. Related Work（使用 literature-synthesis 生成内容，保留 [EV-xxx] 标注）
-## 3. Research Gap & Motivation
-## 4. Proposed Methodology
-## 5. Experiment Design
-## 6. Expected Results
-## 7. Timeline
-## 8. References（APA 格式，来自论文库）
+## 摘要（150-200 字）
+## 一、引言
+## 二、相关工作（使用 literature-synthesis 生成内容，保留 [EV-xxx] 标注）
+## 三、研究空白与动机
+## 四、研究方法
+## 五、实验设计
+## 六、预期结果
+## 七、时间规划
+## 八、参考文献（APA 格式，来自论文库）
 ```
 
 每个含文献结论的句子后附 `[EV-xxx]`；无证据支撑的声明必须改写或打 `[MATERIAL GAP]` 标签，不得删除信息缺口。

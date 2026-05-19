@@ -238,14 +238,14 @@ def gate_6(proj_dir: Path, verbose: bool):
     text = read_text(report_path)
 
     REQUIRED_SECTIONS = [
-        ("Abstract",      r"#+\s+Abstract"),
-        ("Introduction",  r"#+\s+(Introduction|引言|简介)"),
-        ("Related Work",  r"#+\s+(Related Work|文献综述|相关工作)"),
-        ("Gap/Motivation",r"#+\s+(Gap|Research Gap|动机|研究空白|Motivation)"),
-        ("Methodology",   r"#+\s+(Methodology|方法|研究方案|Proposed Method)"),
-        ("Experiment",    r"#+\s+(Experiment|实验|实验设计|Experimental)"),
-        ("Results",       r"#+\s+(Result|Expected|预期|结果|Findings)"),
-        ("References",    r"#+\s+(References|参考文献)"),
+        ("摘要",     r"#+\s+(摘要|Abstract)"),
+        ("引言",     r"#+\s+(引言|简介|研究背景|Introduction)"),
+        ("相关工作", r"#+\s+(相关工作|文献综述|Related Work)"),
+        ("研究空白", r"#+\s+(研究空白|研究动机|Gap|Research Gap|Motivation)"),
+        ("研究方法", r"#+\s+(研究方法|方法论|方案|Methodology|Proposed Method)"),
+        ("实验设计", r"#+\s+(实验设计|实验方案|Experiment|Experimental)"),
+        ("预期结果", r"#+\s+(预期结果|实验结果|结果分析|Result|Expected|Findings)"),
+        ("参考文献", r"#+\s+(参考文献|References)"),
     ]
     found = [(name, bool(re.search(pat, text, re.IGNORECASE)))
              for name, pat in REQUIRED_SECTIONS]
