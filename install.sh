@@ -101,11 +101,23 @@ fi
 if command -v pip &>/dev/null; then
   echo ""
   echo "📦 安装 Python 依赖..."
-  pip3 install --quiet trafilatura python-pptx markdown
+  pip install --quiet trafilatura python-pptx markdown numpy scipy sympy
   echo "✅ Python 依赖已安装"
 else
   echo "⚠️  未找到 pip，请手动安装："
-  echo "   pip install trafilatura python-pptx markdown"
+  echo "   pip install trafilatura python-pptx markdown numpy scipy sympy"
+fi
+
+# 8. 安装 Workspace UI Node.js 依赖
+EXT_DIR="${WORKSPACE_DEST}/extensions/workspace-api"
+if [ -d "${EXT_DIR}" ] && command -v npm &>/dev/null; then
+  echo ""
+  echo "📦 安装 Workspace UI 依赖..."
+  npm install --prefix "${EXT_DIR}" --silent
+  echo "✅ Workspace UI 依赖已安装"
+else
+  echo "⚠️  未找到 npm 或扩展目录，请手动安装："
+  echo "   cd ${EXT_DIR} && npm install"
 fi
 
 echo ""
@@ -113,5 +125,7 @@ echo "✅ 安装完成！"
 echo ""
 echo "下一步："
 echo "  1. 填写个人配置：${WORKSPACE_DEST}/USER_CONFIG.md"
-echo "  2. 重启 OpenClaw"
-echo "  3. 输入 @scientist 开始使用"
+echo "  2. 重启 OpenClaw：openclaw gateway restart"
+echo "  3. 启动文件浏览器：node ${EXT_DIR}/server.js"
+echo "     访问：http://127.0.0.1:18790"
+echo "  4. 输入 @scientist 开始使用"

@@ -107,6 +107,25 @@ python scripts/session_restore.py my-project
 
 所有脚本仅依赖 Python 3.9+ stdlib，无需额外安装。
 
+### MCP 工具层（v0.8.0 新增）
+
+通过 OpenClaw MCP 协议对接本地与云端计算服务，配置写入 `~/.openclaw/openclaw.json`：
+
+| MCP Server | 用途 |
+|------------|------|
+| `math` | 本地统计计算（scipy/sympy）— 精确数值 |
+| `wolfram` | Wolfram Alpha LLM API — 自然语言数学/物理问题 |
+| `academic-search` | 学术文献免费搜索 |
+| `academic-write` | 学术写作辅助 |
+| `academic-chart` | 学术图表生成 |
+| `academic-formatter` | 格式化排版 |
+
+Math-analysis Companion Skill 内置工具路由规则：LLM 自主判断何时调用 Wolfram（自然语言推导）或本地 scipy/sympy（可重现数值计算）。
+
+### Workspace 文件浏览器（v0.8.1 新增）
+
+独立 Express 服务，让团队成员通过浏览器查看研究产出（报告、PPT、JSON 证据链），无需直接访问服务器文件系统。
+
 ---
 
 ## 安装
@@ -115,6 +134,7 @@ python scripts/session_restore.py my-project
 
 - [OpenClaw](https://openclaw.ai) 已安装
 - Python 3.9+（用于执行层脚本、PPT 生成和 HTML 导出）
+- Node.js 18+（用于 Workspace 文件浏览器）
 - （可选）Semantic Scholar API Key，申请地址：https://api.semanticscholar.org/api-docs/
 
 ### 方法一：Git Clone（推荐）
@@ -141,7 +161,10 @@ cp USER_CONFIG.example.md ~/.openclaw/workspace-scientist/USER_CONFIG.md
 #   "workspace": "~/.openclaw/workspace-scientist" }
 
 # 4. 安装 Python 依赖
-pip install trafilatura python-pptx markdown
+pip install trafilatura python-pptx markdown numpy scipy sympy
+
+# 5. 安装 Workspace 文件浏览器依赖
+cd extensions/workspace-api && npm install
 ```
 
 ### 更新框架（不影响个人数据）
@@ -190,6 +213,79 @@ bash install.sh --update
 
 ---
 
+## Workspace 文件浏览器
+
+独立于 OpenClaw 网关的轻量文件服务器，运行在端口 18790，用于浏览和预览研究产出文件。
+
+### 架构说明
+
+```
+OpenClaw 网关 :18789   ←  @scientist 对话
+Workspace UI  :18790   ←  文件浏览器（独立进程）
+```
+
+两者完全独立。Workspace UI 不需要登录，仅限本机访问（127.0.0.1）。
+
+### 快速启动
+
+```bash
+# 进入 Workspace 目录
+cd ~/.openclaw/workspace-scientist
+
+# 启动文件浏览器（默认端口 18790）
+node extensions/workspace-api/server.js
+
+# 自定义端口
+node extensions/workspace-api/server.js 18791
+```
+
+启动成功后，终端输出：
+```
+✅ Workspace UI: http://127.0.0.1:18790
+   Projects root: ~/.openclaw/workspace-scientist/state/projects
+```
+
+浏览器打开 **http://127.0.0.1:18790** 即可访问。
+
+### 依赖安装
+
+`bash install.sh` 会自动安装 Node.js 依赖（步骤 8）。若手动安装：
+
+```bash
+cd ~/.openclaw/workspace-scientist/extensions/workspace-api
+npm install
+```
+
+仅需 `express` 包，无其他依赖。
+
+### 使用方式
+
+1. 打开 http://127.0.0.1:18790
+2. 在输入框中填入项目 slug（如 `chain-of-thought-reasoning`）
+3. 点击「浏览」查看文件树：
+   - `.html` / `.md` / `.txt` / `.json` / `.csv` — 在线预览
+   - `.pptx` / `.pdf` — 直接下载
+
+### API 端点
+
+服务器同时提供 REST API，可供团队自动化脚本调用：
+
+| 端点 | 用途 |
+|------|------|
+| `GET /api/workspace/files?path=<slug>` | 列出目录内容 |
+| `GET /api/workspace/file?path=<slug>/report.html` | 获取文件内容 |
+
+路径均相对于 `state/projects/` 根目录，越界访问返回 403。
+
+### 团队成员使用
+
+1. `git clone` 仓库后运行 `bash install.sh`
+2. 填写个人 `USER_CONFIG.md`
+3. 按上述步骤启动 `server.js`
+4. 各成员的 `state/projects/` 完全独立（gitignored），浏览器看到的是本机数据
+
+---
+
 ## 数据隐私
 
 本仓库遵循三层数据分离原则：
@@ -223,12 +319,15 @@ bash install.sh --update
 - **PPT 生成**: python-pptx（中文学术模板）
 - **HTML 报告**: Python `markdown` 库 + 内嵌 CSS
 - **搜索缓存**: SHA1 查询 hash → search_cache.json
+- **数学计算 MCP**: scipy（统计检验）+ sympy（符号运算）+ Wolfram Alpha LLM API
+- **学术云服务 MCP**: Academic Free MCP Servers（搜索 / 写作 / 图表 / 排版）
+- **Workspace 文件浏览器**: Node.js + Express（独立服务，端口 18790）
 
 ---
 
 ## 版本
 
-当前版本：**v0.7.0**（2026-05-19）
+当前版本：**v0.8.1**（2026-05-19）
 
 详见 [CHANGELOG.md](CHANGELOG.md)。
 
