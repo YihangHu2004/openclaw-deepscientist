@@ -1,8 +1,9 @@
 const fs = require('fs');
 const path = require('path');
+const express = require('express');
 
 module.exports = function (claw) {
-  // 你的 scientist workspace 根目录
+  // scientist workspace 根目录
   const WORKSPACE_ROOT = path.join(
     require('os').homedir(),
     '.openclaw',
@@ -11,11 +12,11 @@ module.exports = function (claw) {
     'projects'
   );
 
-  // 文件列表接口
+  // ---------- API：文件列表 ----------
   claw.app.get('/api/workspace/files', async (req, res) => {
     try {
       const dirPath = path.join(WORKSPACE_ROOT, req.query.path || '');
-      // 安全检查：只允许访问 workspace 内的目录
+      // 安全检查
       if (!dirPath.startsWith(WORKSPACE_ROOT)) {
         return res.status(403).send('Forbidden');
       }
@@ -30,7 +31,7 @@ module.exports = function (claw) {
     }
   });
 
-  // 文件内容接口
+  // ---------- API：文件内容 ----------
   claw.app.get('/api/workspace/file', async (req, res) => {
     try {
       const filePath = path.join(WORKSPACE_ROOT, req.query.path);
@@ -50,8 +51,8 @@ module.exports = function (claw) {
       res.status(500).send(err.message);
     }
   });
-};
-// ---------- 新增：挂载前端静态页面到 /workspace ----------
-  const workspaceUiPath = path.join(__dirname, '..', '..', 'control-ui'); // 指向项目根目录下的 control-ui 文件夹
+
+  // ---------- 静态页面：挂载到 /workspace ----------
+  const workspaceUiPath = path.join(__dirname, '..', '..', 'control-ui');
   claw.app.use('/workspace', express.static(workspaceUiPath));
 };
