@@ -10,6 +10,7 @@ Commands:
   list         List EV records with optional filters
   coverage     Compute evidence coverage rate for a report file
   gap-count    Count [MATERIAL GAP] annotations in a report file
+  audit        Record claim-auditor result (faithful/drifted/unsupported)
 """
 import argparse
 import json
@@ -87,9 +88,11 @@ def cmd_list(proj_dir: Path, args) -> None:
         audit = item.get("audit_result")
         ai = {"faithful": "✅", "drifted": "⚠️ ", "unsupported": "❌"}.get(audit or "", "  ")
         print(f"  {item['ev_id']}  {ci}[{item.get('confidence','?')}]  {ai}  paper:{item.get('paper_id','?')}")
-        print(f"     原文：{item.get('original_text','')[:90]}…")
-        if item.get("claim_text"):
-            print(f"     声明：{item['claim_text'][:90]}…")
+        orig = item.get("original_text", "")
+        print(f"     原文：{orig[:90]}{'…' if len(orig) > 90 else ''}")
+        claim = item.get("claim_text", "")
+        if claim:
+            print(f"     声明：{claim[:90]}{'…' if len(claim) > 90 else ''}")
         print()
 
 
@@ -139,7 +142,7 @@ def cmd_gap_count(proj_dir: Path, args) -> None:
     gaps = re.findall(r"\[MATERIAL GAP[^\]]*\]", text)
 
     LIT_PAT = re.compile(
-        r"[^\n。]*(?:研究表明|等人|et al\.|表明|发现|\d+\s*[%％])[^\n。]*[。\n]",
+        r"[^\n。]*(?:研究表明|等人|et al\.|according to|表明|发现|证明|显示|达到|实现了|\d+\s*[%％])[^\n。]*[。\n]",
         re.IGNORECASE,
     )
     lit_count = len(LIT_PAT.findall(text))
@@ -155,6 +158,29 @@ def cmd_gap_count(proj_dir: Path, args) -> None:
         print(f"\n📋 标注列表：")
         for g in gaps:
             print(f"   · {g}")
+
+
+def cmd_audit(proj_dir: Path, args) -> None:
+    ev = load_evidence(proj_dir)
+    items = ev.get("items", [])
+
+    target = next((i for i in items if i["ev_id"] == args.ev_id), None)
+    if target is None:
+        print(f"❌ 未找到 EV 记录：{args.ev_id}", file=sys.stderr)
+        sys.exit(1)
+
+    old = target.get("audit_result")
+    target["audit_result"] = args.result
+    save_evidence(proj_dir, ev)
+
+    icon = {"faithful": "✅", "drifted": "⚠️ ", "unsupported": "❌"}.get(args.result, "?")
+    print(f"{icon} {args.ev_id} 审计结果已记录：{args.result}")
+    if old:
+        print(f"   （覆盖旧结果：{old}）")
+    if args.result == "drifted" and args.note:
+        print(f"   修改建议：{args.note}")
+    elif args.result == "unsupported":
+        print(f"   ⚠️  此条 EV 需修改报告正文，删除或替换相关声明")
 
 
 # ── Entry point ────────────────────────────────────────────────────────────────
@@ -195,6 +221,13 @@ def main() -> None:
     p_gap = sub.add_parser("gap-count", help="统计 [MATERIAL GAP] 数量")
     p_gap.add_argument("report_path", help="report.md 路径")
 
+    # audit
+    p_aud = sub.add_parser("audit", help="记录 claim-auditor 审计结果")
+    p_aud.add_argument("ev_id", help="EV 编号（如 EV-003）")
+    p_aud.add_argument("result", choices=["faithful", "drifted", "unsupported"],
+                       help="审计判定")
+    p_aud.add_argument("--note", default="", help="漂移说明或修改建议")
+
     args   = parser.parse_args()
     proj_dir = STATE_DIR / args.slug
 
@@ -205,7 +238,8 @@ def main() -> None:
     {"add":       cmd_add,
      "list":      cmd_list,
      "coverage":  cmd_coverage,
-     "gap-count": cmd_gap_count}[args.command](proj_dir, args)
+     "gap-count": cmd_gap_count,
+     "audit":     cmd_audit}[args.command](proj_dir, args)
 
 
 if __name__ == "__main__":
