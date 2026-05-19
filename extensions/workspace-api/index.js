@@ -51,3 +51,7 @@ module.exports = function (claw) {
     }
   });
 };
+// ---------- 新增：挂载前端静态页面到 /workspace ----------
+  const workspaceUiPath = path.join(__dirname, '..', '..', 'control-ui'); // 指向项目根目录下的 control-ui 文件夹
+  claw.app.use('/workspace', express.static(workspaceUiPath));
+};
