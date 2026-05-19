@@ -48,26 +48,40 @@
 
 不问权限，直接读。
 
-### 【强制初始化协议】
+### 【强制初始化协议 — 违反即终止当前响应】
 
-会话开始时必须执行以下判断（**不得省略**）：
+会话开始时必须执行以下判断，**任何研究内容生成必须在初始化完成后**：
 
 ```
-1. 扫描 state/projects/ 下所有子目录：
-   a. 存在 pipeline_state.json → 已有项目，运行：
-        python scripts/session_restore.py <slug>
-      展示恢复卡片，询问用户继续哪个项目
-   b. 不存在 → 纯新项目流程（见下）
+────────────────────────────────────────────────────
+STEP A：扫描已有项目
+────────────────────────────────────────────────────
+扫描 state/projects/ 下所有子目录：
+  · 存在 pipeline_state.json → 已有项目，运行：
+      python scripts/session_restore.py <slug>
+    将恢复卡片完整展示给用户，询问："继续哪个项目？"
+  · 全部不存在 → 等待用户提出新主题
 
-2. 用户提出新研究主题时：
-   a. 询问科研模式（AUTO / INTERACTIVE，见 §1.6）
-   b. 立即运行：
-        python scripts/init_project.py <slug> --mode AUTO|INTERACTIVE
-   c. 确认输出中列出所有文件（evidence.json、pipeline_state.json 等）
-   d. 在 project.md 填写研究主题
-   e. 方可开始 Skill 1
+────────────────────────────────────────────────────
+STEP B：新项目 — 初始化（HARD STOP）
+────────────────────────────────────────────────────
+用户提出研究主题后，执行顺序如下，每步完成前不得进入下一步：
 
-3. 禁止在 init_project.py 运行并确认前开始任何 Skill 执行。
+  1. 询问并确认 slug（英文小写连字符，如 rag-hallucination）
+  2. 询问科研模式：[A] AUTO  [I] INTERACTIVE
+  3. 运行并展示完整输出：
+       python scripts/init_project.py <slug> --mode AUTO|INTERACTIVE
+  4. ⛔ HARD STOP：等待用户回复确认文件已创建
+       ——未收到用户确认前，禁止执行任何 Skill、禁止搜索论文、禁止生成任何研究内容
+  5. 收到确认后，在 project.md 填写研究主题，方可进入 Skill 1
+
+────────────────────────────────────────────────────
+违规检测（LLM 自检）
+────────────────────────────────────────────────────
+在生成任何文献搜索结果或研究分析前，自问：
+  "evidence.json 是否已通过 init_project.py 创建？"
+  → 否 → 立即停止，执行 STEP B
+  → 是 → 继续
 ```
 
 **项目状态管理**
@@ -224,25 +238,44 @@ python scripts/gate_check.py <slug> <阶段编号>
 ```
 
 选择写入 `project.md` 头部：`- **模式**: AUTO | INTERACTIVE`
-同时初始化 `pipeline_state.json`（见 Part III 模板）和 `evidence.json`。
+
+**初始化必须通过脚本完成**（见 §1.2 HARD STOP 协议）：
+```bash
+python scripts/init_project.py <slug> --mode AUTO|INTERACTIVE
+```
+脚本会同时创建 `pipeline_state.json`、`evidence.json` 及所有必要文件。
+禁止手动创建这些文件，禁止在脚本运行前开始任何研究步骤。
 
 ### 严格顺序依赖链
 
 ```
 阶段 1  arxiv-search ─────────────────────────────────────────┐
-        前置：有研究主题                                        ├─ 并行 OK（都是搜索）
+        前置：init_project.py 已运行 + 用户已确认              ├─ 并行 OK（都是搜索）
 阶段 2  semantic-scholar ────────────────────────────────────┘
-        ↓ 文献覆盖门：论文库 ≥ 5 条，triage priority ≥ 3 篇
+        ↓ gate_check.py 2 → 文献覆盖门：论文库 ≥ 5 条，triage priority ≥ 3 篇
 阶段 3  paper-reader（顺序精读 Top 5-8 篇）
-        ↓ 精读完整门：结构化笔记 ≥ 5 篇，evidence.json ≥ 10 条 EV
+        ↓ gate_check.py 3 → 精读完整门：结构化笔记 ≥ 5 篇，evidence.json ≥ 10 条 EV
 阶段 4  literature-synthesis
-        ↓ 综述质量门：Related Work ≥ 200 词，Gap ≥ 3 条（各含 EV-xxx）
+        ↓ gate_check.py 4 → 综述质量门：Related Work ≥ 200 词，Gap ≥ 3 条（各含 EV-xxx）
 阶段 5  research-planner  ← ★ 两种模式都必须等用户选择研究方向 ★
-        ↓ 研究计划门：假设可证伪，dataset + baseline 各有原文参考
+        ↓ gate_check.py 5 → 研究计划门：假设可证伪，dataset + baseline 各有原文参考
 阶段 6  report-writer
-        ↓ 报告完整门：8 章节齐全，evidence 覆盖率 ≥ 80%
-阶段 7  science-slides
-        ↓ PPT 结构门：≥ 12 张，.pptx 文件存在
+        ↓ gate_check.py 6 → 报告完整门：8 章节齐全，evidence 覆盖率 ≥ 80%
+
+        ⛔ HARD STOP — 报告门通过后，必须询问用户：
+        ══════════════════════════════════════════════
+        ✅ 科研报告已完成并通过验收门。
+        是否需要生成开题报告 PPT（Skill 7 · science-slides）？
+
+          [Y] 是，继续生成 PPT
+          [N] 否，流水线到此结束
+          [S] 暂停，稍后决定
+        ══════════════════════════════════════════════
+        → 收到 [Y] 后方可进入阶段 7
+        → [N] 或 [S] 则更新 TODO.md 并结束
+
+阶段 7  science-slides（仅用户选 [Y] 时执行）
+        ↓ gate_check.py 7 → PPT 结构门：≥ 12 张，.pptx 文件存在
 ```
 
 ### AUTO 模式行为
