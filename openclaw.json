@@ -3,5 +3,13 @@
     "controlUi": {
       "root": "./control-ui"
     }
+  },
+  "plugins": {
+    "entries": {
+      "workspace-api": {
+        "enabled": true,
+        "source": "./extensions/workspace-api"
+      }
+    }
   }
 }
