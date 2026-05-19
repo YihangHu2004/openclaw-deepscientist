@@ -25,6 +25,10 @@ openclaw.json
 # ═══ OpenClaw 运行时（自动生成）══════════════
 .openclaw/
 
+# ═══ Node.js════════════════════════════════
+node_modules/
+package-lock.json
+
 # ═══ Python / 系统════════════════════════════
 __pycache__/
 *.pyc

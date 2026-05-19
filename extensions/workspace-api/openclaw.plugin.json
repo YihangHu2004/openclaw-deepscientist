@@ -1,0 +1,16 @@
+{
+  "id": "workspace-api",
+  "name": "Scientist Workspace API",
+  "version": "0.1.0",
+  "description": "File browser API and UI for scientist workspace projects",
+  "author": "YihangHu2004",
+  "license": "MIT",
+  "activation": {
+    "onStartup": true
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}

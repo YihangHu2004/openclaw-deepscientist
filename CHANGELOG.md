@@ -2,6 +2,26 @@
 
 All notable changes to OpenClaw Scientist will be documented here.
 
+## [0.8.1] - 2026-05-19
+
+### 修复：Workspace UI 独立服务器
+
+**问题**：`extensions/workspace-api/index.js` 使用 `module.exports = function(claw)` 格式，与 OpenClaw 插件 SDK（`definePluginEntry`）不兼容，无法通过 `plugins.load.paths` 加载；且 `/workspace` 路由被 OpenClaw 内置 chat UI 占用，`controlUi.root` 覆盖会破坏 gateway 认证连接。
+
+**修复**：
+- 新增 `extensions/workspace-api/server.js`：独立 Express 服务器，默认端口 **18790**，完全绕开插件系统
+- 新增 `extensions/workspace-api/openclaw.plugin.json`：保留 manifest 供后续正式插件化参考
+- `package.json` 新增 `express ^5.2.1` 依赖
+- `.gitignore` 新增 `node_modules/` 和 `package-lock.json`
+
+**启动方式**：
+```
+node extensions/workspace-api/server.js
+```
+访问：`http://127.0.0.1:18790`
+
+---
+
 ## [0.8.0] - 2026-05-19
 
 ### 新增：MCP 工具层 + 数学分析 Skill
