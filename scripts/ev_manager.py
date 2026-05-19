@@ -104,9 +104,14 @@ def cmd_coverage(proj_dir: Path, args) -> None:
 
     text = report_path.read_text(encoding="utf-8")
 
-    # Sentences containing literature claim signals
+    # Sentences containing literature claim signals.
+    # Percentages only count when co-occurring with a performance/comparison verb.
     LIT_PAT = re.compile(
-        r"[^\n。]*(?:研究表明|等人|et al\.|according to|表明|发现|证明|显示|达到|实现了|\d+\s*[%％])[^\n。]*[。\n]",
+        r"[^\n。]*(?:"
+        r"研究表明|等人|et al\.|according to|表明|发现|证明|显示|达到|实现了"
+        r"|(?:超越|超过|提升|提高|改善|降低|减少|增加|outperform|surpass|achiev|improv|reduc|increas|decreas)"
+        r"[^\n。]{0,60}\d+\s*[%％]"
+        r")[^\n。]{0,200}[。\n]",
         re.IGNORECASE,
     )
     lit_sentences = list(dict.fromkeys(LIT_PAT.findall(text)))  # deduplicate, preserve order
@@ -142,7 +147,11 @@ def cmd_gap_count(proj_dir: Path, args) -> None:
     gaps = re.findall(r"\[MATERIAL GAP[^\]]*\]", text)
 
     LIT_PAT = re.compile(
-        r"[^\n。]*(?:研究表明|等人|et al\.|according to|表明|发现|证明|显示|达到|实现了|\d+\s*[%％])[^\n。]*[。\n]",
+        r"[^\n。]*(?:"
+        r"研究表明|等人|et al\.|according to|表明|发现|证明|显示|达到|实现了"
+        r"|(?:超越|超过|提升|提高|改善|降低|减少|增加|outperform|surpass|achiev|improv|reduc|increas|decreas)"
+        r"[^\n。]{0,60}\d+\s*[%％]"
+        r")[^\n。]{0,200}[。\n]",
         re.IGNORECASE,
     )
     lit_count = len(LIT_PAT.findall(text))

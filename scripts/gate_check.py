@@ -264,9 +264,15 @@ def gate_6(proj_dir: Path, verbose: bool):
     if not c2:
         blockers.append(f"报告字数不足（{word_count} 词，需 ≥1000）")
 
-    # EV coverage: sentences with literature claim signals
+    # EV coverage: sentences with literature claim signals.
+    # Percentages only count when co-occurring with a performance/comparison verb
+    # to avoid matching pre-commitment or audit lines like ">= 80%" or "100% faithful".
     LIT_PAT = re.compile(
-        r"[^\n。]*(?:研究表明|等人|et al\.|according to|表明|发现|证明|显示|达到|实现了|\d+\s*[%％])[^\n。]*[。\n]",
+        r"[^\n。]*(?:"
+        r"研究表明|等人|et al\.|according to|表明|发现|证明|显示|达到|实现了"
+        r"|(?:超越|超过|提升|提高|改善|降低|减少|增加|outperform|surpass|achiev|improv|reduc|increas|decreas)"
+        r"[^\n。]{0,60}\d+\s*[%％]"
+        r")[^\n。]*[。\n]",
         re.IGNORECASE,
     )
     lit_sentences = LIT_PAT.findall(text)
