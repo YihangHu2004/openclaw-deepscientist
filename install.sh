@@ -55,7 +55,7 @@ touch "${WORKSPACE_DEST}/memory/.gitkeep"          2>/dev/null || true
 # 6. 注册 scientist agent 和 workspace-api 扩展到 openclaw.json
 OPENCLAW_CONFIG="${OPENCLAW_DIR}/openclaw.json"
 if [ -f "${OPENCLAW_CONFIG}" ]; then
-  python3 - "${OPENCLAW_DIR}" "${WORKSPACE_DEST}" "${SCRIPT_DIR}/extensions/workspace-api" <<'PYEOF'
+  python - "${OPENCLAW_DIR}" "${WORKSPACE_DEST}" "${SCRIPT_DIR}/extensions/workspace-api" <<'PYEOF'
 import json, sys, os
 openclaw_dir  = sys.argv[1]
 workspace     = sys.argv[2]
@@ -98,13 +98,13 @@ else
 fi
 
 # 7. 安装 Python 依赖（可选）
-if command -v pip3 &>/dev/null; then
+if command -v pip &>/dev/null; then
   echo ""
   echo "📦 安装 Python 依赖..."
   pip3 install --quiet trafilatura python-pptx markdown
   echo "✅ Python 依赖已安装"
 else
-  echo "⚠️  未找到 pip3，请手动安装："
+  echo "⚠️  未找到 pip，请手动安装："
   echo "   pip install trafilatura python-pptx markdown"
 fi
 
