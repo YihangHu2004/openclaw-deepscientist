@@ -1,9 +1,4 @@
 {
-  "gateway": {
-    "controlUi": {
-      "root": "./control-ui"
-    }
-  },
   "plugins": {
     "entries": {
       "workspace-api": {
