@@ -336,3 +336,20 @@ ACCENT_ORANGE = RGBColor(0xFF, 0x8C, 0x00)
 | 文件存在 | .pptx 文件实际存在于 slides/ 目录 |
 | 样式来源 | 模板文件已存在 **或** academic-zh.md 已存在 |
 | 用户确认 | HTML 预览已展示并经用户确认 |
+
+---
+
+## 执行步骤（强制）
+
+完成本阶段内容后，按顺序执行：
+
+```bash
+# 1. 签署物料护照（.pptx 文件是本阶段产出）
+python scripts/passport.py <slug> sign state/projects/<slug>/slides/开题报告.pptx 7
+
+# 2. 门控检查（PPT 结构门）
+python scripts/gate_check.py <slug> 7
+```
+
+- PASS → 更新 TODO.md `[x] 阶段 7：开题 PPT`，流水线主干完成
+- FAIL → 展示缺失项，执行 SCIENTIST.md §1.6 失败处理流程（通常需补充幻灯片数量或必要章节）

@@ -101,3 +101,20 @@ Triage 结果写入 search_cache.json 对应论文的 `triage_score` / `triage_t
 | 高引论文 | ≥ 1 篇 citation_count > 50 |
 | 缓存写入 | search_cache.json 已更新 |
 | 异议文献 | ≥ 1 篇异议/挑战论文摘要已记录 |
+
+---
+
+## 执行步骤（强制）
+
+完成本阶段内容后，按顺序执行：
+
+```bash
+# 1. 签署物料护照（search_cache.json 是本阶段主要产出）
+python scripts/passport.py <slug> sign state/projects/<slug>/search_cache.json 1
+
+# 2. 门控检查在 S2 完成后统一执行（文献覆盖门合并 S1+S2）
+#    S2 结束时运行：python scripts/gate_check.py <slug> 2
+```
+
+- PASS → 更新 TODO.md `[x] 阶段 1+2：文献搜索`，自动进入 S3
+- FAIL → 展示缺失项，执行 SCIENTIST.md §1.6 失败处理流程

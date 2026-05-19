@@ -109,3 +109,23 @@ for table in soup.find_all('table'):
 | EV 来源 | EV 记录 source_type 不得全为 abstract_only |
 | EV 验证 | verified = true（来自实际抓取，非内存重建） |
 | [MATERIAL GAP] | 每篇笔记中标注数量记入 SUMMARY.md gap_count |
+
+---
+
+## 执行步骤（强制）
+
+完成本阶段内容后，按顺序执行：
+
+```bash
+# 1. 签署物料护照（project.md 含所有精读笔记）
+python scripts/passport.py <slug> sign state/projects/<slug>/project.md 3
+
+# 2. 验证 EV 覆盖率（精读后应已添加 ≥10 条 EV）
+python scripts/ev_manager.py <slug> list --stage 3
+
+# 3. 门控检查（精读完整门）
+python scripts/gate_check.py <slug> 3
+```
+
+- PASS → 更新 TODO.md `[x] 阶段 3：论文精读`，进入 S4 literature-synthesis
+- FAIL → 展示缺失项，执行 SCIENTIST.md §1.6 失败处理流程（通常需补读论文或补 EV 记录）

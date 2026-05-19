@@ -98,3 +98,20 @@ Gap 分析中每条 limitation 引用 ≥ 1 EV-xxx（局限性来自论文，不
 | 时间表 | ≥ 4 个阶段 |
 | Gap-EV 绑定 | 研究动机引用 ≥ 2 条 EV-xxx |
 | 子问题 | ≥ 2 条可证伪子问题 |
+
+---
+
+## 执行步骤（强制）
+
+完成本阶段内容后，按顺序执行：
+
+```bash
+# 1. 签署物料护照（project.md 含研究计划）
+python scripts/passport.py <slug> sign state/projects/<slug>/project.md 5
+
+# 2. 门控检查（研究计划门）
+python scripts/gate_check.py <slug> 5
+```
+
+- PASS → 更新 TODO.md `[x] 阶段 5：研究规划`，进入 S6 report-writer
+- FAIL → 展示缺失项，执行 SCIENTIST.md §1.6 失败处理流程（通常需补充数值指标或数据集来源）

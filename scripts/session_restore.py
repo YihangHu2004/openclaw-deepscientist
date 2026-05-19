@@ -1,0 +1,165 @@
+# -*- coding: utf-8 -*-
+"""
+session_restore.py <slug>
+
+Reads pipeline_state.json and prints a recovery card so the scientist
+agent can re-orient at the start of a new session.
+
+Exit code: 0 on success, 1 on error.
+"""
+import json
+import sys
+sys.stdout.reconfigure(encoding="utf-8")
+sys.stderr.reconfigure(encoding="utf-8")
+from pathlib import Path
+
+WORKSPACE = Path(__file__).parent.parent
+STATE_DIR  = WORKSPACE / "state" / "projects"
+
+STAGE_NAMES = {
+    1: "arxiv-search",
+    2: "semantic-scholar",
+    3: "paper-reader",
+    4: "literature-synthesis",
+    5: "research-planner",
+    6: "report-writer",
+    7: "science-slides",
+    8: "claim-auditor",
+    9: "paper-reviewer",
+}
+
+STATUS_ICONS = {
+    "pending":     "⬜",
+    "in_progress": "🔄",
+    "done":        "✅",
+    "failed":      "❌",
+    "skipped":     "⏭️ ",
+}
+
+
+def load_state(proj_dir: Path) -> dict:
+    ps_path = proj_dir / "pipeline_state.json"
+    if not ps_path.exists():
+        print("❌ pipeline_state.json 不存在，请先运行 init_project.py", file=sys.stderr)
+        sys.exit(1)
+    return json.loads(ps_path.read_text(encoding="utf-8"))
+
+
+def load_evidence_count(proj_dir: Path) -> int:
+    ev_path = proj_dir / "evidence.json"
+    if not ev_path.exists():
+        return 0
+    ev = json.loads(ev_path.read_text(encoding="utf-8"))
+    return len(ev.get("items", []))
+
+
+def format_ts(ts: str) -> str:
+    if not ts:
+        return "未知"
+    return ts[:19].replace("T", " ")
+
+
+def main() -> None:
+    if len(sys.argv) < 2:
+        print("用法：python session_restore.py <slug>", file=sys.stderr)
+        sys.exit(1)
+
+    slug     = sys.argv[1]
+    proj_dir = STATE_DIR / slug
+
+    if not proj_dir.exists():
+        print(f"❌ 项目不存在：{slug}", file=sys.stderr)
+        sys.exit(1)
+
+    ps = load_state(proj_dir)
+
+    current_stage    = ps.get("current_stage", 1)
+    mode             = ps.get("mode", "INTERACTIVE")
+    stage_status     = ps.get("stage_status", {})
+    gate_results     = ps.get("gate_results", {})
+    improvement_cnt  = ps.get("improvement_counts", {})
+    cons_confirms    = ps.get("consecutive_confirms", 0)
+    passport         = ps.get("material_passport", [])
+    created_at       = format_ts(ps.get("created_at", ""))
+    last_updated     = format_ts(ps.get("last_updated", ""))
+    pending_action   = ps.get("pending_action")
+    ic               = ps.get("interactive_checkpoint")
+
+    ev_count = load_evidence_count(proj_dir)
+
+    stage_name = STAGE_NAMES.get(current_stage, f"stage-{current_stage}")
+
+    # Determine checkpoint mode label
+    if cons_confirms >= 2:
+        cp_mode = "SLIM（已连续确认 ≥2 次）"
+    else:
+        cp_mode = "FULL"
+
+    # Last gate result
+    last_gate_key = f"after_{current_stage - 1}" if current_stage > 1 else None
+    last_gate = gate_results.get(last_gate_key) if last_gate_key else None
+
+    width = 58
+    bar   = "═" * width
+
+    print(f"\n╔{bar}╗")
+    print(f"║  📦 项目恢复卡片  ·  {slug:<35}║")
+    print(f"╠{bar}╣")
+    print(f"║  🔄 模式：{mode:<10}  创建：{created_at}  ║")
+    print(f"║  ⏱️  最后更新：{last_updated:<43}║")
+    print(f"╠{bar}╣")
+
+    # Current stage
+    cur_status = stage_status.get(str(current_stage), "pending")
+    cur_icon   = STATUS_ICONS.get(cur_status, "?")
+    print(f"║  {cur_icon} 当前阶段：S{current_stage} {stage_name:<44}║")
+
+    if pending_action:
+        print(f"║  ⏸️  待处理动作：{str(pending_action)[:44]:<44}║")
+    if ic:
+        ic_str = str(ic)[:46]
+        print(f"║  📋 上次检查点：{ic_str:<44}║")
+
+    print(f"╠{bar}╣")
+
+    # Stage progress strip
+    print(f"║  阶段进度：", end="")
+    for i in range(1, 10):
+        st  = stage_status.get(str(i), "pending")
+        ico = {"pending": "○", "in_progress": "●", "done": "✓", "failed": "✗", "skipped": "–"}.get(st, "?")
+        print(f"S{i}:{ico} ", end="")
+    print(f"{'':2}║")
+
+    print(f"╠{bar}╣")
+
+    # Evidence and gate summary
+    print(f"║  📚 EV 记录数：{ev_count:<4}  🏛️  物料护照：{len(passport)} 条{'':<15}║")
+    print(f"║  🔁 改进循环：{str(improvement_cnt)[:36]:<44}║")
+    print(f"║  🎯 检查点模式：{cp_mode:<43}║")
+
+    if last_gate:
+        passed     = last_gate.get("passed", False)
+        gate_icon  = "✅" if passed else "❌"
+        gate_stage = current_stage - 1
+        gate_ts    = format_ts(last_gate.get("timestamp", ""))
+        print(f"╠{bar}╣")
+        print(f"║  最近门控结果：S{gate_stage} {gate_icon}  {'PASS' if passed else 'FAIL':<6}  {gate_ts:<24}║")
+        if not passed:
+            blockers = last_gate.get("blockers", [])
+            for b in blockers[:2]:
+                print(f"║     · {str(b)[:51]:<51}║")
+
+    print(f"╠{bar}╣")
+
+    # Next action prompt
+    if cur_status == "done" or current_stage > 1:
+        print(f"║  → 继续运行 S{current_stage} {stage_name}  {'':30}║")
+    else:
+        print(f"║  → 从 S{current_stage} {stage_name} 开始  {'':30}║")
+
+    print(f"║  → 门控验证：python scripts/gate_check.py {slug} {current_stage:<14}║")
+    print(f"╚{bar}╝\n")
+
+
+if __name__ == "__main__":
+    main()

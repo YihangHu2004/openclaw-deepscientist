@@ -2,6 +2,68 @@
 
 All notable changes to OpenClaw Scientist will be documented here.
 
+## [0.7.0] - 2026-05-19
+
+### 新增：执行层（Execution Layer）
+
+v0.7.0 将验收门从"君子协定"升级为"可见问责制"——脚本计算、结果可见、状态持久化。
+
+**五个新增 Python 脚本（全部 stdlib，无额外依赖）**
+
+- **`scripts/init_project.py <slug> [--mode AUTO|INTERACTIVE]`**
+  - 初始化 `state/projects/<slug>/` 完整目录结构
+  - 创建：`pipeline_state.json`（mode + stage_status 全 pending + material_passport）/ `evidence.json`（空 items）/ `project.md`（模板）/ `TODO.md`（9 个阶段 checkbox）/ `SUMMARY.md`（空）/ `slides/`（空目录）
+  - 如 `state/baselines.json` 不存在则同时初始化
+  - **新项目必须通过此脚本启动，不得手动创建文件**
+
+- **`scripts/gate_check.py <slug> <stage> [--verbose]`**
+  - 读取实际文件计算门控条件，输出 PASS/FAIL 框 + JSON
+  - 支持 S2（文献覆盖门）/ S3（精读完整门）/ S4（综述质量门）/ S5（研究计划门）/ S6（报告完整门）/ S7（PPT 结构门）
+  - 退出码：0 = PASS，1 = FAIL
+  - 结果写入 `pipeline_state.json.gate_results`，PASS 时自动推进 `current_stage`
+
+- **`scripts/ev_manager.py <slug> <command>`**
+  - `add`：自增 EV-xxx ID，追加到 evidence.json（**禁止手动编辑 items 数组**）
+  - `list [--stage] [--confidence]`：过滤显示 EV 记录
+  - `coverage <report_path>`：正则统计文献结论句 EV 覆盖率（要求 ≥80%）
+  - `gap-count <report_path>`：统计 [MATERIAL GAP] 比例（上限 20%）
+
+- **`scripts/passport.py <slug> <command>`**
+  - `sign <artifact> <stage>`：计算 SHA256，追加到 `pipeline_state.json.material_passport`（append-only）
+  - `verify <artifact>`：对比当前哈希与护照记录，文件被外部修改时输出 ⚠️
+  - `list`：列出所有护照条目
+
+- **`scripts/session_restore.py <slug>`**
+  - 读取 `pipeline_state.json`，打印完整恢复卡片（项目名 / 模式 / 当前阶段 / 阶段进度条 / EV 数量 / 物料护照数 / 最近门控结果）
+
+**SCIENTIST.md 协议更新**
+
+- **§1.2 强制初始化协议**：会话开始时必须扫描 `state/projects/`；有项目 → 运行 `session_restore.py`；无项目 → 运行 `init_project.py` 后方可开始 Skill
+- **§1.2 门控检查规则**：每阶段结束必须调用 `gate_check.py`；脚本输出必须展示给用户，未展示不得声称阶段完成
+- **§1.7 证据强制协议**：新增 `ev_manager.py add` 调用说明；禁止手动编辑 evidence.json items 数组
+
+**各 SKILL.md 新增「执行步骤（强制）」节**
+
+- S1–S9 所有 9 个 SKILL.md 末尾追加固定格式的执行步骤（passport.py sign + gate_check.py 调用，S8/S9 可选）
+- 明确说明每个阶段的主要产出文件、签署命令和阶段编号
+
+**SKILL_REGISTRY.md 新增「执行层脚本」表格**
+
+- 列出 5 个脚本的功能与调用时机
+
+### 架构边界（诚实评估）
+
+| 能力 | v0.7.0 | 说明 |
+|------|--------|------|
+| 门控条件自动计算（从文件读取） | ✅ | gate_check.py |
+| 门控结果持久化 | ✅ | pipeline_state.json.gate_results |
+| 证据记录结构化管理 | ✅ | ev_manager.py |
+| 跨会话状态恢复 | ✅ | session_restore.py |
+| 内容哈希验证 | ✅ | passport.py |
+| 完全防止 LLM 绕过门控 | ❌ | 无 daemon；门控可见但不可强制拦截 |
+
+---
+
 ## [0.6.0] - 2026-05-19
 
 ### 新增

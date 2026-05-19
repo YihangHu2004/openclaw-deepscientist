@@ -33,3 +33,17 @@
 - **S8/S9 独立触发**：不强制纳入流水线，可在 S6 完成后选择性运行
 - **DA-CRITICAL 阻断**：S9 的 Devil's Advocate 若提出 DA-CRITICAL 项，必须在报告中明确回应后方可通过
 - **各阶段摘要**：每个 Skill 完成后写入项目 `SUMMARY.md`，格式见各 SKILL.md 的「输出路径」节
+
+---
+
+## 执行层脚本（v0.7.0）
+
+每个 Skill 完成后必须调用对应脚本（见各 SKILL.md `## 执行步骤（强制）` 节）：
+
+| 脚本 | 功能 | 调用时机 |
+|------|------|---------|
+| `scripts/init_project.py` | 初始化完整项目文件结构 | 新项目启动前（必须） |
+| `scripts/gate_check.py` | 读取文件计算门控条件，PASS/FAIL 写入 pipeline_state.json | 每阶段结束后 |
+| `scripts/ev_manager.py` | 管理 evidence.json（增/查/覆盖率/gap统计） | 精读阶段起 + 报告验收 |
+| `scripts/passport.py` | SHA256 内容哈希 + 物料护照验证 | 每阶段结束签署主要产出 |
+| `scripts/session_restore.py` | 跨会话状态恢复卡片 | 新会话开始时 |

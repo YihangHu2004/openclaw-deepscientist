@@ -87,3 +87,20 @@
 | Research Gap | ≥ 3 条，每条引用 ≥ 1 EV-xxx |
 | 对比表 | ≥ 5 行 |
 | 争议点 | ≥ 1 条异议文献观点已写入 |
+
+---
+
+## 执行步骤（强制）
+
+完成本阶段内容后，按顺序执行：
+
+```bash
+# 1. 签署物料护照（project.md 含 Related Work + Gap 列表）
+python scripts/passport.py <slug> sign state/projects/<slug>/project.md 4
+
+# 2. 门控检查（综述质量门）
+python scripts/gate_check.py <slug> 4
+```
+
+- PASS → 更新 TODO.md `[x] 阶段 4：文献综述`，进入 S5 research-planner
+- FAIL → 展示缺失项，执行 SCIENTIST.md §1.6 失败处理流程（通常需补充 Gap 条目或 EV 引用）

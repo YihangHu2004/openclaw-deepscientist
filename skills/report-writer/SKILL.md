@@ -93,3 +93,26 @@ print("report.html 已生成")
 | 文件存在 | report.md + report.html 均存在 |
 | [MATERIAL GAP] 上限 | ≤ 总结论句数的 20% |
 | 预承诺记录 | 报告质量预承诺已写入 report.md 头部 |
+
+---
+
+## 执行步骤（强制）
+
+完成本阶段内容后，按顺序执行：
+
+```bash
+# 1. 签署物料护照（report.md 是本阶段核心产出）
+python scripts/passport.py <slug> sign state/projects/<slug>/report.md 6
+
+# 2. 验证 EV 覆盖率（要求 ≥80%）
+python scripts/ev_manager.py <slug> coverage state/projects/<slug>/report.md
+
+# 3. 验证 MATERIAL GAP 比例（要求 ≤20%）
+python scripts/ev_manager.py <slug> gap-count state/projects/<slug>/report.md
+
+# 4. 门控检查（报告完整门）
+python scripts/gate_check.py <slug> 6
+```
+
+- PASS → 更新 TODO.md `[x] 阶段 6：科研报告`，进入 S7 science-slides
+- FAIL → 展示缺失项，执行 SCIENTIST.md §1.6 失败处理流程（常见原因：EV 覆盖率不足或章节缺失）

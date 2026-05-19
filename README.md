@@ -74,6 +74,39 @@ report.md §2 第 3 段："该模型准确率达 94.2% [EV-001]"
 
 > S8/S9 为可选质量保障阶段，不强制纳入主流水线。
 
+### 执行层（v0.7.0 新增）
+
+验收门从文字要求升级为脚本强制计算，门控结果持久化，跨会话可恢复：
+
+```
+scripts/
+├── init_project.py    # 初始化完整项目文件结构（新项目必须通过此脚本启动）
+├── gate_check.py      # 读取实际文件计算门控条件，PASS/FAIL 写入 pipeline_state.json
+├── ev_manager.py      # 管理 evidence.json（增/查/覆盖率/gap统计）
+├── passport.py        # SHA256 内容哈希 + 物料护照验证（跨会话完整性）
+└── session_restore.py # 跨会话状态恢复卡片
+```
+
+```bash
+# 新项目启动
+python scripts/init_project.py my-project --mode INTERACTIVE
+
+# 每阶段结束后（示例：S3 精读完成后）
+python scripts/passport.py my-project sign state/projects/my-project/project.md 3
+python scripts/gate_check.py my-project 3
+
+# 添加证据记录
+python scripts/ev_manager.py my-project add \
+  --paper-id 2310.08560 \
+  --original "Our model achieves 94.2% on GSM8K..." \
+  --confidence high
+
+# 会话恢复
+python scripts/session_restore.py my-project
+```
+
+所有脚本仅依赖 Python 3.9+ stdlib，无需额外安装。
+
 ---
 
 ## 安装
@@ -81,7 +114,7 @@ report.md §2 第 3 段："该模型准确率达 94.2% [EV-001]"
 ### 前提条件
 
 - [OpenClaw](https://openclaw.ai) 已安装
-- Python 3.9+（用于 PPT 生成和 HTML 导出）
+- Python 3.9+（用于执行层脚本、PPT 生成和 HTML 导出）
 - （可选）Semantic Scholar API Key，申请地址：https://api.semanticscholar.org/api-docs/
 
 ### 方法一：Git Clone（推荐）
@@ -195,7 +228,7 @@ bash install.sh --update
 
 ## 版本
 
-当前版本：**v0.6.0**（2026-05-19）
+当前版本：**v0.7.0**（2026-05-19）
 
 详见 [CHANGELOG.md](CHANGELOG.md)。
 

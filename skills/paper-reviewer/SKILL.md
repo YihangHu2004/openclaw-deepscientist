@@ -142,3 +142,20 @@ DA 的任务是**主动寻找问题**，而非按维度评分：
 | DA 报告 | DA 框架完整（竞争解释 + 逻辑漏洞 + 对立文献 + 裁决） |
 | DA-CRITICAL | 所有 DA-CRITICAL 项已在报告中得到明确回应或修改 |
 | 共识汇总 | 已生成共识报告并写入 review/ 目录 |
+
+---
+
+## 执行步骤（强制）
+
+完成本阶段内容后，按顺序执行：
+
+```bash
+# 1. 签署物料护照（共识报告是本阶段产出）
+python scripts/passport.py <slug> sign state/projects/<slug>/review/consensus.md 9
+
+# 注：本阶段为可选阶段，无独立 gate_check 门控
+#     DA-CRITICAL 问题需在 report.md 中得到明确回应后，重新签署 report.md
+```
+
+- 完成 → 更新 TODO.md `[x] 阶段 9：同行评审`，科研项目全流程完成
+- DA-CRITICAL 项已回应 → 重新签署：`python scripts/passport.py <slug> sign state/projects/<slug>/report.md 9`

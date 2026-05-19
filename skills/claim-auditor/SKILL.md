@@ -102,3 +102,23 @@
 | 无根据 EV | 所有 `unsupported` 条目已修改报告正文 |
 | 漂移 EV | 所有 `drifted` 条目已给出修改建议（可用户决定是否采纳） |
 | 审计报告 | 已追加到 report.md 附录 |
+
+---
+
+## 执行步骤（强制）
+
+完成本阶段内容后，按顺序执行：
+
+```bash
+# 1. 签署物料护照（report.md 在 claim-auditor 修订后重新签署）
+python scripts/passport.py <slug> sign state/projects/<slug>/report.md 8
+
+# 2. 验证文件完整性（对比 S6 签署的哈希）
+python scripts/passport.py <slug> verify state/projects/<slug>/report.md
+
+# 注：本阶段为可选阶段，无独立 gate_check 门控
+#     验证输出⚠️表示报告在 S6 签署后发生了变更（预期行为，auditor 修订了正文）
+```
+
+- 完成 → 更新 TODO.md `[x] 阶段 8：引用审计`，可选继续 S9 paper-reviewer
+- `unsupported` EV 已修改正文，重新签署物料护照
