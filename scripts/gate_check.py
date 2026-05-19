@@ -295,7 +295,7 @@ def gate_6(proj_dir: Path, verbose: bool):
     if not html_exists:
         blockers.append("report.html 不存在，需运行 HTML 生成脚本")
 
-    return c1 and c2, conditions, blockers
+    return c1 and c2 and c3 and c4 and html_exists, conditions, blockers
 
 
 def gate_7(proj_dir: Path, verbose: bool):
