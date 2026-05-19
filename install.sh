@@ -52,16 +52,20 @@ fi
 touch "${WORKSPACE_DEST}/state/projects/.gitkeep" 2>/dev/null || true
 touch "${WORKSPACE_DEST}/memory/.gitkeep"          2>/dev/null || true
 
-# 6. 注册 scientist agent 到 openclaw.json
+# 6. 注册 scientist agent 和 workspace-api 扩展到 openclaw.json
 OPENCLAW_CONFIG="${OPENCLAW_DIR}/openclaw.json"
 if [ -f "${OPENCLAW_CONFIG}" ]; then
-  python3 - "${OPENCLAW_DIR}" "${WORKSPACE_DEST}" <<'PYEOF'
+  python3 - "${OPENCLAW_DIR}" "${WORKSPACE_DEST}" "${SCRIPT_DIR}/extensions/workspace-api" <<'PYEOF'
 import json, sys, os
 openclaw_dir  = sys.argv[1]
 workspace     = sys.argv[2]
+ext_source    = sys.argv[3]   # workspace-api 扩展的绝对路径
 config_path   = os.path.join(openclaw_dir, "openclaw.json")
+
 with open(config_path) as f:
     cfg = json.load(f)
+
+# --- 注册 scientist agent ---
 agents = cfg.setdefault("agents", {}).setdefault("list", [])
 if not any(a.get("id") == "scientist" for a in agents):
     agents.append({
@@ -69,16 +73,28 @@ if not any(a.get("id") == "scientist" for a in agents):
         "model": "deepseek/deepseek-v4-pro",
         "workspace": workspace
     })
-    with open(config_path, "w") as f:
-        json.dump(cfg, f, indent=2, ensure_ascii=False)
     print("✅ scientist agent 已注册到 openclaw.json")
 else:
     print("ℹ️  scientist agent 已存在，跳过注册")
+
+# --- 注册 workspace-api 扩展 ---
+plugins = cfg.setdefault("plugins", {}).setdefault("entries", {})
+if "workspace-api" not in plugins:
+    plugins["workspace-api"] = {
+        "enabled": True,
+        "source": ext_source
+    }
+    print(f"✅ workspace-api 扩展已注册 (source: {ext_source})")
+else:
+    print("ℹ️  workspace-api 扩展已存在，跳过注册")
+
+with open(config_path, "w") as f:
+    json.dump(cfg, f, indent=2, ensure_ascii=False)
 PYEOF
 else
   echo "⚠️  未找到 ${OPENCLAW_CONFIG}，跳过自动注册"
-  echo "   请手动在 openclaw.json 的 agents.list 中添加："
-  echo "   { \"id\": \"scientist\", \"model\": \"deepseek/deepseek-v4-pro\", \"workspace\": \"${WORKSPACE_DEST}\" }"
+  echo "   请手动在 openclaw.json 的 agents.list 中添加 scientist agent"
+  echo "   并在 plugins.entries 中添加 workspace-api 扩展"
 fi
 
 # 7. 安装 Python 依赖（可选）
