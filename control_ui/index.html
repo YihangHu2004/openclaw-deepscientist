@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>小科 · Workspace</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      background: #f0f2f5;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* 顶部项目选择栏 */
+    .toolbar {
+      padding: 12px 20px;
+      background: white;
+      border-bottom: 1px solid #e0e0e0;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .toolbar label { font-size: 14px; color: #555; }
+    #project-input {
+      padding: 6px 12px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      width: 260px;
+      font-size: 14px;
+    }
+    #load-btn {
+      padding: 6px 16px;
+      background: #1A3C8F;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    #load-btn:hover { background: #142c6e; }
+
+    /* 主体：文件树 + 预览 */
+    .main {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* 左侧文件树 */
+    .sidebar {
+      width: 280px;
+      background: white;
+      border-right: 1px solid #e0e0e0;
+      display: flex;
+      flex-direction: column;
+    }
+    .sidebar-header {
+      padding: 14px 16px;
+      border-bottom: 1px solid #eee;
+      font-weight: 600;
+      color: #1a1a2e;
+      font-size: 15px;
+    }
+    .tree-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 0;
+    }
+
+    /* 文件树节点样式 */
+    .tree-item {
+      display: flex;
+      align-items: center;
+      padding: 6px 16px;
+      cursor: pointer;
+      font-size: 14px;
+      color: #333;
+      transition: background 0.1s;
+    }
+    .tree-item:hover { background: #f5f7ff; }
+    .tree-item.active { background: #eef2ff; color: #1A3C8F; font-weight: 500; }
+    .tree-item .icon { margin-right: 8px; font-size: 16px; }
+    .tree-item.directory { font-weight: 500; }
+    .tree-item.file { padding-left: 32px; }  /* 文件比目录多缩进 */
+    .tree-children { display: none; }
+    .tree-children.open { display: block; }
+
+    /* 右侧预览区 */
+    .preview {
+      flex: 1;
+      padding: 20px;
+      overflow: auto;
+      background: #fafafa;
+    }
+    .preview-placeholder {
+      color: #999;
+      text-align: center;
+      margin-top: 60px;
+      font-size: 16px;
+    }
+    iframe {
+      width: 100%;
+      height: 80vh;
+      border: none;
+      background: white;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+      border-radius: 4px;
+    }
+    pre {
+      background: #fff;
+      padding: 20px;
+      border-radius: 4px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.6;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    .download-btn {
+      display: inline-block;
+      padding: 10px 24px;
+      background: #FF8C00;
+      color: white;
+      text-decoration: none;
+      border-radius: 4px;
+      font-size: 15px;
+      margin-top: 20px;
+    }
+    .download-btn:hover { background: #e07b00; }
+    .error-msg { color: #d32f2f; }
+    .loading { color: #888; }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <label>📁 当前项目：</label>
+    <input type="text" id="project-input" placeholder="输入项目 slug，例如 deep-science-demo" />
+    <button id="load-btn">加载文件</button>
+  </div>
+
+  <div class="main">
+    <!-- 左侧文件树 -->
+    <div class="sidebar">
+      <div class="sidebar-header">📂 工作区文件</div>
+      <div class="tree-container" id="file-tree"></div>
+    </div>
+
+    <!-- 右侧预览 -->
+    <div class="preview" id="preview-area">
+      <div class="preview-placeholder">👈 选择左侧文件即可预览</div>
+    </div>
+  </div>
+
+  <script>
+    const apiBase = ''; // 同源，使用相对路径
+    let currentProject = '';
+
+    // --- 工具函数：拼接 API 路径 ---
+    function buildPath(project, relativePath = '') {
+      // 去掉首尾多余斜杠
+      const p = project.replace(/^\/+|\/+$/g, '');
+      const r = relativePath.replace(/^\/+|\/+$/g, '');
+      return r ? `${p}/${r}` : p;
+    }
+
+    // --- 初始化：从 URL 参数读取 project ---
+    function getUrlParam(name) {
+      const params = new URLSearchParams(window.location.search);
+      return params.get(name);
+    }
+
+    // --- 渲染文件树 ---
+    async function loadTree(container, project, subPath = '') {
+      const fullPath = buildPath(project, subPath);
+      try {
+        const resp = await fetch(`${apiBase}/api/workspace/files?path=${encodeURIComponent(fullPath)}`);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const items = await resp.json();
+
+        // 清空当前容器
+        container.innerHTML = '';
+
+        // 先展示目录，再展示文件（目录按名称排序）
+        const dirs = items.filter(i => i.isDirectory).sort((a,b) => a.name.localeCompare(b.name));
+        const files = items.filter(i => !i.isDirectory).sort((a,b) => a.name.localeCompare(b.name));
+
+        // 渲染目录
+        for (const dir of dirs) {
+          const dirDiv = document.createElement('div');
+          dirDiv.className = 'tree-item directory';
+          dirDiv.innerHTML = `<span class="icon">📁</span> ${dir.name}`;
+          
+          // 子节点容器
+          const childrenContainer = document.createElement('div');
+          childrenContainer.className = 'tree-children';
+          
+          dirDiv.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            // 切换展开/收起
+            if (childrenContainer.classList.contains('open')) {
+              childrenContainer.classList.remove('open');
+            } else {
+              // 如果还没加载过内容，则加载
+              if (childrenContainer.children.length === 0) {
+                childrenContainer.innerHTML = '<div class="loading" style="padding-left:32px;">加载中...</div>';
+                const childPath = subPath ? `${subPath}/${dir.name}` : dir.name;
+                await loadTree(childrenContainer, project, childPath);
+              }
+              childrenContainer.classList.add('open');
+            }
+          });
+          
+          container.appendChild(dirDiv);
+          container.appendChild(childrenContainer);
+        }
+
+        // 渲染文件
+        for (const file of files) {
+          const fileDiv = document.createElement('div');
+          fileDiv.className = 'tree-item file';
+          const icon = file.name.endsWith('.html') ? '🌐' : 
+                       file.name.endsWith('.pptx') ? '📊' : 
+                       file.name.endsWith('.md') ? '📝' : '📄';
+          fileDiv.innerHTML = `<span class="icon">${icon}</span> ${file.name}`;
+          
+          const filePath = subPath ? `${subPath}/${file.name}` : file.name;
+          fileDiv.addEventListener('click', (e) => {
+            e.stopPropagation();
+            // 高亮当前选中
+            document.querySelectorAll('.tree-item.active').forEach(el => el.classList.remove('active'));
+            fileDiv.classList.add('active');
+            // 预览文件
+            previewFile(project, filePath);
+          });
+          
+          container.appendChild(fileDiv);
+        }
+      } catch (err) {
+        container.innerHTML = `<div class="error-msg" style="padding:8px 16px;">❌ 加载失败: ${err.message}</div>`;
+      }
+    }
+
+    // --- 预览文件 ---
+    async function previewFile(project, relativePath) {
+      const preview = document.getElementById('preview-area');
+      const fullPath = buildPath(project, relativePath);
+      const ext = relativePath.split('.').pop().toLowerCase();
+      const fileUrl = `${apiBase}/api/workspace/file?path=${encodeURIComponent(fullPath)}`;
+
+      // 显示加载状态
+      preview.innerHTML = '<div class="loading">加载中...</div>';
+
+      if (ext === 'html') {
+        // 直接用 iframe 渲染
+        preview.innerHTML = `<iframe src="${fileUrl}" sandbox="allow-same-origin allow-scripts"></iframe>`;
+      } else if (ext === 'pptx') {
+        // 提供下载链接
+        const fileName = relativePath.split('/').pop();
+        preview.innerHTML = `
+          <div style="text-align:center;">
+            <p style="font-size:16px; margin-bottom:16px;">📊 ${fileName}</p>
+            <a href="${fileUrl}" download="${fileName}" class="download-btn">⬇️ 下载 PPT 文件</a>
+            <p style="margin-top:20px; color:#888;">浏览器无法直接预览 PPT，请下载后查看</p>
+          </div>`;
+      } else {
+        // 其他文本文件：读取内容并显示
+        try {
+          const resp = await fetch(fileUrl);
+          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+          const text = await resp.text();
+          preview.innerHTML = `<pre>${escapeHtml(text)}</pre>`;
+        } catch (err) {
+          preview.innerHTML = `<div class="error-msg">❌ 读取文件失败: ${err.message}</div>`;
+        }
+      }
+    }
+
+    // 简单的 HTML 转义
+    function escapeHtml(text) {
+      return text.replace(/&/g, '&amp;')
+                 .replace(/</g, '&lt;')
+                 .replace(/>/g, '&gt;')
+                 .replace(/"/g, '&quot;');
+    }
+
+    // --- 加载按钮事件 ---
+    document.getElementById('load-btn').addEventListener('click', () => {
+      const slug = document.getElementById('project-input').value.trim();
+      if (!slug) {
+        alert('请输入项目标识（slug）');
+        return;
+      }
+      currentProject = slug;
+      const treeContainer = document.getElementById('file-tree');
+      treeContainer.innerHTML = '<div class="loading">加载文件列表...</div>';
+      loadTree(treeContainer, currentProject);
+    });
+
+    // 页面加载时自动填入 URL 参数
+    window.addEventListener('DOMContentLoaded', () => {
+      const projectParam = getUrlParam('project');
+      if (projectParam) {
+        document.getElementById('project-input').value = projectParam;
+        // 自动加载
+        document.getElementById('load-btn').click();
+      }
+    });
+  </script>
+</body>
+</html>
