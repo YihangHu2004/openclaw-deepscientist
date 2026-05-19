@@ -117,6 +117,52 @@ DA 的任务是**主动寻找问题**，而非按维度评分：
 
 ---
 
+## 改进循环（Revision Loop）
+
+共识汇总完成后**必须**展示改进清单卡片，不得直接结束：
+
+```
+╔══════════════════════════════════════════════════════╗
+║  📋 同行评审改进清单                                  ║
+╠══════════════════════════════════════════════════════╣
+║  🔴 DA-CRITICAL：N 项（必须处理，否则结论不可信）      ║
+║  🟡 Major Revision：N 项（强烈建议修改）               ║
+║  🟢 Minor Revision：N 项（可选）                      ║
+╠══════════════════════════════════════════════════════╣
+║  请选择：                                             ║
+║    [1] 处理全部 DA-CRITICAL + Major 项                ║
+║    [2] 仅处理 DA-CRITICAL（最小修改）                  ║
+║    [3] 接受现状（在报告头部注明已知局限）               ║
+║    [4] 暂停，稍后决定                                  ║
+╚══════════════════════════════════════════════════════╝
+```
+
+**选 [1] 或 [2] 的执行路径**：
+
+```
+改进内容 → 分类路由：
+  · 内容/论证问题 → 返回 S6 修改 report.md
+  · 引用漂移问题 → 返回 S8 运行 claim-auditor
+  · 文献缺失问题 → 返回 S3 补充精读
+
+修改完成后：
+  1. python scripts/passport.py <slug> sign state/projects/<slug>/report.md 9
+  2. python scripts/gate_check.py <slug> 6   ← 验证修改后的报告仍通过 S6 门
+  3. 在 review/ 目录追加修订记录：
+       review/revision_{日期}.md（记录：哪些问题已解决 / 哪些有意保留）
+  4. improvement_counts["s9"] += 1（写入 pipeline_state.json）
+```
+
+**改进轮次限制**：最多 3 轮。第 3 轮后若仍有 DA-CRITICAL 未解决，强制选 [3]（接受现状并注明）。
+
+**选 [3] 的处理**：在 `report.md` 摘要后追加：
+```markdown
+## 已知局限（同行评审后确认）
+- {DA-CRITICAL 或 Major 问题，说明为何保留}
+```
+
+---
+
 ## 输出路径
 
 - 完整评审报告：`state/projects/<slug>/review/peer_review_{日期}.md`
@@ -147,15 +193,21 @@ DA 的任务是**主动寻找问题**，而非按维度评分：
 
 ## 执行步骤（强制）
 
-完成本阶段内容后，按顺序执行：
-
 ```bash
-# 1. 签署物料护照（共识报告是本阶段产出）
+# 1. 生成共识报告后，签署物料护照
 python scripts/passport.py <slug> sign state/projects/<slug>/review/consensus.md 9
 
-# 注：本阶段为可选阶段，无独立 gate_check 门控
-#     DA-CRITICAL 问题需在 report.md 中得到明确回应后，重新签署 report.md
+# 2. 展示改进清单卡片，等待用户选择（见「改进循环」节）
+
+# 3a. 若选 [1]/[2]：修改报告后执行
+python scripts/passport.py <slug> sign state/projects/<slug>/report.md 9
+python scripts/gate_check.py <slug> 6    # 确认修改后报告仍通过 S6
+
+# 3b. 若选 [3]：在 report.md 追加「已知局限」节即可
+
+# 4. 签署修订记录
+python scripts/passport.py <slug> sign state/projects/<slug>/review/revision_{日期}.md 9
 ```
 
-- 完成 → 更新 TODO.md `[x] 阶段 9：同行评审`，科研项目全流程完成
-- DA-CRITICAL 项已回应 → 重新签署：`python scripts/passport.py <slug> sign state/projects/<slug>/report.md 9`
+- DA-CRITICAL 全部回应后 → 更新 TODO.md `[x] 阶段 9：同行评审（已完成改进）`
+- 接受现状后 → 更新 TODO.md `[x] 阶段 9：同行评审（已注明已知局限）`

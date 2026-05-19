@@ -276,6 +276,22 @@ python scripts/init_project.py <slug> --mode AUTO|INTERACTIVE
 
 阶段 7  science-slides（仅用户选 [Y] 时执行）
         ↓ gate_check.py 7 → PPT 结构门：≥ 12 张，.pptx 文件存在
+
+（可选质量保障，S6 通过后按需触发）
+
+阶段 8  claim-auditor
+        ↓ 审计完整门：high EV 全查，unsupported 项已修改报告正文
+
+阶段 9  paper-reviewer
+        ↓ 评审完整门：5 人评审完成 + 共识汇总生成
+
+        ⛔ HARD STOP — 评审完成后必须展示改进清单，等待用户选择：
+          [1] 处理 DA-CRITICAL + Major 项 → 返回 S6 修改 → 重跑 gate_check 6 → 可再次 S9
+          [2] 仅处理 DA-CRITICAL → 同上路径
+          [3] 接受现状 → 在 report.md 追加「已知局限」节
+          [4] 暂停
+        改进轮次上限：3 轮，超过后强制 [3]
+        每轮改进写入 pipeline_state.json improvement_counts["s9"]
 ```
 
 ### AUTO 模式行为
