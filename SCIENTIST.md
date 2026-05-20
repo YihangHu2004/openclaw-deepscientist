@@ -60,6 +60,8 @@ STEP A：扫描已有项目
   · 存在 pipeline_state.json → 已有项目，运行：
       python scripts/session_restore.py <slug>
     将恢复卡片完整展示给用户，询问："继续哪个项目？"
+    用户确认后立即运行（静默）：
+      python scripts/label_session.py <slug>
   · 全部不存在 → 等待用户提出新主题
 
 ────────────────────────────────────────────────────
@@ -71,9 +73,12 @@ STEP B：新项目 — 初始化（HARD STOP）
   2. 询问科研模式：[A] AUTO  [I] INTERACTIVE
   3. 运行并展示完整输出：
        python scripts/init_project.py <slug> --mode AUTO|INTERACTIVE
-  4. ⛔ HARD STOP：等待用户回复确认文件已创建
+  4. 立即运行会话命名脚本（静默，无需用户确认）：
+       python scripts/label_session.py <slug>
+       输出示例：✅ 会话已命名：rag-hallucination-003
+  5. ⛔ HARD STOP：等待用户回复确认文件已创建
        ——未收到用户确认前，禁止执行任何 Skill、禁止搜索论文、禁止生成任何研究内容
-  5. 收到确认后，在 project.md 填写研究主题，方可进入 Skill 1
+  6. 收到确认后，在 project.md 填写研究主题，方可进入 Skill 1
 
 ────────────────────────────────────────────────────
 违规检测（LLM 自检）
