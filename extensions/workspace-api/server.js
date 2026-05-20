@@ -37,16 +37,62 @@ app.get('/api/workspace/files', async (req, res) => {
 // ---------- API：文件内容 ----------
 app.get('/api/workspace/file', async (req, res) => {
   try {
-    const filePath = path.resolve(WORKSPACE_ROOT, req.query.path);
+    const requestedPath = req.query.path;
+    if (!requestedPath) return res.status(400).send('Missing path parameter');
+
+    const filePath = path.resolve(WORKSPACE_ROOT, requestedPath);
     if (!filePath.startsWith(WORKSPACE_ROOT)) return res.status(403).send('Forbidden');
+
+    // 检查文件是否存在并获取信息
+    let stat;
+    try {
+      stat = await fs.promises.stat(filePath);
+    } catch (err) {
+      console.error('stat error for', filePath, err);
+      return res.status(404).send('File not found');
+    }
+    if (!stat.isFile()) return res.status(400).send('Not a file');
+
     const ext = path.extname(filePath).toLowerCase();
+
+    // 文本文件直接返回内容
     if (['.html', '.md', '.txt', '.json', '.csv'].includes(ext)) {
       const data = await fs.promises.readFile(filePath, 'utf-8');
       res.type(ext === '.html' ? 'text/html' : 'text/plain').send(data);
-    } else {
-      res.download(filePath);
+      return;
     }
+
+    // 其他文件：手动流式传输，完全避开 res.download
+    const fileName = path.basename(filePath);
+    const mime = {
+      '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      '.pdf': 'application/pdf',
+      '.png': 'image/png',
+      '.jpg': 'image/jpeg',
+      '.zip': 'application/zip',
+    }[ext] || 'application/octet-stream';
+
+    res.writeHead(200, {
+      'Content-Type': mime,
+      'Content-Disposition': `attachment; filename="${encodeURIComponent(fileName)}"`,
+      'Content-Length': stat.size,
+    });
+
+    const readStream = fs.createReadStream(filePath);
+    readStream.on('error', (streamErr) => {
+      console.error('Stream error:', streamErr);
+      // 如果响应头还没发，可以返回 500
+      if (!res.headersSent) {
+        res.status(500).send('Stream error');
+      } else {
+        res.end();
+      }
+    });
+    readStream.pipe(res);
   } catch (err) {
+    console.error('File serving error:', err);
     res.status(500).send(err.message);
   }
 });
