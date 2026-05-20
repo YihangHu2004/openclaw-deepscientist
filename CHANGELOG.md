@@ -2,6 +2,21 @@
 
 All notable changes to OpenClaw Scientist will be documented here.
 
+## [0.8.2] - 2026-05-20
+### 修复：Windows 系统文件下载返回 NotFoundError
+**问题**：`server.js` 的 `/api/workspace/file` 端点使用 `Express` 的 `res.download` 方法，其底层依赖
+      `send` 模块对 `Windows` 反斜杠路径处理不当，导致磁盘上明确存在的文件仍返回 Not Found。
+**修复**：重写文件下载逻辑，改用 fs.stat 手动检查文件存在，通过 fs.createReadStream
+      流式传输文件内容，并显式设置 `Content-Type`、`Content-Disposition` 和 `Content-Length`
+      响应头，完全绕过 `res.download` 及 `send` 模块的兼容性问题。同时添加 `stat` 错误日志
+      便于后续排查。此修复同时兼容 Windows 与 Linux 平台。
+启动方式：不变:
+```
+node extensions/workspace-api/server.js
+```
+访问：不变:
+```http://127.0.0.1:18790```
+
 ## [0.8.1] - 2026-05-19
 
 ### 修复：Workspace UI 独立服务器
