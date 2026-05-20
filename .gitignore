@@ -11,6 +11,10 @@ state/projects/*/
 # ═══ 所有生成文件（报告、PPT、HTML）══════════════
 state/**/*.html
 state/**/*.pptx
+
+# ═══ PPT 模板（用户私有，不上传）══════════════
+slides/templates/*.pptx
+!slides/templates/.gitkeep
 state/**/*.pdf
 state/**/*.json
 state/**/*.md

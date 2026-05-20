@@ -23,8 +23,41 @@ Step 3  生成完整 .pptx  →  state/projects/<slug>/slides/开题报告.pptx
 
 检测路径（按优先级）：
 1. 用户本次对话中提供的 `.pptx` 路径
-2. `~/slides/templates/` 目录下的 `.pptx` 文件（取最新修改的）
-3. 无模板 → 进入从零绘制流程
+2. `slides/templates/` 目录（workspace 相对路径，即 `~/.openclaw/workspace-scientist/slides/templates/`）下的 `.pptx` 文件（取最新修改的）
+3. USER_CONFIG.md 中配置的 `template_path` 字段（绝对路径，如 `C:\Users\hp\Downloads\模版.pptx`）
+4. 无模板 → 进入从零绘制流程
+
+**模板检测代码**（Step 0 执行时运行）：
+```python
+import os, re, glob
+
+def find_template(slug: str) -> str | None:
+    """Return template path by priority, or None if not found."""
+    workspace = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+    # Priority 1: user-provided in conversation (passed as argument)
+    # handled by caller
+
+    # Priority 2: slides/templates/ in workspace
+    tmpl_dir = os.path.join(workspace, "slides", "templates")
+    if os.path.isdir(tmpl_dir):
+        pptx_files = glob.glob(os.path.join(tmpl_dir, "*.pptx"))
+        if pptx_files:
+            return max(pptx_files, key=os.path.getmtime)
+
+    # Priority 3: template_path field in USER_CONFIG.md
+    config_path = os.path.join(workspace, "USER_CONFIG.md")
+    if os.path.isfile(config_path):
+        with open(config_path, encoding="utf-8") as f:
+            for line in f:
+                m = re.match(r'\s*-\s*\*\*template_path\*\*:\s*(.+)', line)
+                if m:
+                    tp = m.group(1).strip()
+                    if tp and os.path.isfile(tp):
+                        return tp
+
+    return None  # → 从零绘制
+```
 
 **模板缓存**：检测到模板后，立即复制到项目目录：
 ```python
@@ -35,9 +68,9 @@ os.makedirs(os.path.dirname(CACHE_PATH), exist_ok=True)
 
 if not os.path.exists(CACHE_PATH):
     shutil.copy2(template_path, CACHE_PATH)
-    print(f"模板已缓存：{CACHE_PATH}")
+    print(f"Template cached: {CACHE_PATH}")
 else:
-    print(f"使用已缓存模板：{CACHE_PATH}")
+    print(f"Using cached template: {CACHE_PATH}")
 
 # 后续所有操作均从 CACHE_PATH 读取，不再依赖原始路径
 template_path = CACHE_PATH

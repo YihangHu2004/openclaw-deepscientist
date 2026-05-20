@@ -29,6 +29,13 @@
 - **PPT 风格**: 蓝白学术（默认）| 深色 | 自定义
 - **引用格式**: APA（默认）| MLA | Chicago | 自定义
 
+## PPT 模板（可选）
+
+- **template_path**: 
+  ↑ 填写 .pptx 模板文件的绝对路径，如：C:\Users\hp\Downloads\模版.pptx
+  ↑ 也可将模板文件放入 slides/templates/ 目录，系统会自动检测
+  ↑ 留空则使用默认蓝白学术样式（academic-zh）
+
 ---
 
 _此文件不入 Git，仅本地使用。首次运行时从 USER_CONFIG.example.md 复制。_
