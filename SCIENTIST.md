@@ -233,7 +233,7 @@ python scripts/gate_check.py <slug> <阶段编号>
 
 ```
 📋 请选择科研模式：
-[A] 全自动流水线 —— 7 个阶段自动串行执行，仅研究方向选择时等待你
+[A] 全自动流水线 —— 8 个阶段自动串行执行，仅研究方向选择时等待你
 [I] 交互审核模式 —— 每阶段完成后展示结果，等你确认或改进后再继续
 ```
 
@@ -262,43 +262,41 @@ python scripts/init_project.py <slug> --mode AUTO|INTERACTIVE
 阶段 6  report-writer
         ↓ gate_check.py 6 → 报告完整门：8 章节齐全，evidence 覆盖率 ≥ 80%
 
-        ⛔ HARD STOP — 报告门通过后，必须询问用户：
+阶段 7  claim-auditor（强制）
+        ↓ gate_check.py 7 → 审计完整门：high EV 全查，unsupported 项已修改报告正文
+
+阶段 8  paper-reviewer（强制）
+        ↓ gate_check.py 8 → 评审完整门：5 人评审完成 + 共识汇总生成
+
+        ⛔ HARD STOP — 评审完成后必须展示改进清单，等待用户选择：
+          [1] 处理 DA-CRITICAL + Major 项 → 返回 S6 修改 → 重跑 gate_check 6 → 可再次 S8
+          [2] 仅处理 DA-CRITICAL → 同上路径
+          [3] 接受现状 → 在 report.md 追加「已知局限」节
+          [4] 暂停
+        改进轮次上限：3 轮，超过后强制 [3]
+        每轮改进写入 pipeline_state.json improvement_counts["s8"]
+
+        ⛔ HARD STOP — 评审门通过后，必须询问用户：
         ══════════════════════════════════════════════
-        ✅ 科研报告已完成并通过验收门。
-        是否需要生成开题报告 PPT（Skill 7 · science-slides）？
+        ✅ 科研报告已完成全部强制评审，通过验收门。
+        是否需要生成开题报告 PPT（Skill 9 · science-slides）？
 
           [Y] 是，继续生成 PPT
           [N] 否，流水线到此结束
           [S] 暂停，稍后决定
         ══════════════════════════════════════════════
-        → 收到 [Y] 后方可进入阶段 7
+        → 收到 [Y] 后方可进入阶段 9
         → [N] 或 [S] 则更新 TODO.md 并结束
 
-阶段 7  science-slides（仅用户选 [Y] 时执行）
-        ↓ gate_check.py 7 → PPT 结构门：≥ 12 张，.pptx 文件存在
-
-（可选质量保障，S6 通过后按需触发）
-
-阶段 8  claim-auditor
-        ↓ 审计完整门：high EV 全查，unsupported 项已修改报告正文
-
-阶段 9  paper-reviewer
-        ↓ 评审完整门：5 人评审完成 + 共识汇总生成
-
-        ⛔ HARD STOP — 评审完成后必须展示改进清单，等待用户选择：
-          [1] 处理 DA-CRITICAL + Major 项 → 返回 S6 修改 → 重跑 gate_check 6 → 可再次 S9
-          [2] 仅处理 DA-CRITICAL → 同上路径
-          [3] 接受现状 → 在 report.md 追加「已知局限」节
-          [4] 暂停
-        改进轮次上限：3 轮，超过后强制 [3]
-        每轮改进写入 pipeline_state.json improvement_counts["s9"]
+阶段 9  science-slides（可选，仅用户选 [Y] 时执行）
+        ↓ gate_check.py 9 → PPT 结构门：≥ 12 张，.pptx 文件存在
 ```
 
 ### AUTO 模式行为
 
 每阶段完成后输出一行进度，自动检查门控，通过则立即进入下一阶段：
 ```
-✅ 阶段 N/7 [阶段名] 完成 → 自动进入阶段 N+1 [下一阶段名]
+✅ 阶段 N/8 [阶段名] 完成 → 自动进入阶段 N+1 [下一阶段名]
    产出：[一句话描述]
 ```
 门控失败：自动补充（最多 2 次）→ 仍失败写 `[!]` 停止，列出缺失项。
@@ -311,12 +309,12 @@ python scripts/init_project.py <slug> --mode AUTO|INTERACTIVE
 |------|---------|------|
 | **FULL** | 首次进入该阶段 / 连续 4 次"继续"后强制弹出 | 完整卡片（产出 + 速览 + 问题 + 全选项） |
 | **SLIM** | 连续 ≥2 次选 [1] 确认后自动降级 | 一行进度 + [1]/[3] 两个选项 |
-| **MANDATORY** | 完整性验证关卡 / 评审决策 / 重要阶段（S3 精读完整门、S6 报告门） | 永远显示 FULL，禁止跳过，只有 [1][2][3] |
+| **MANDATORY** | 完整性验证关卡 / 评审决策 / 重要阶段（S3 精读完整门、S6 报告门、S7 审计门、S8 评审门） | 永远显示 FULL，禁止跳过，只有 [1][2][3] |
 
 **FULL 卡片**（首次 / 强制弹出）：
 ```
 ══════════════════════════════════════════════
-✅ 阶段 N/7：[阶段名]  [FULL]
+✅ 阶段 N/8：[阶段名]  [FULL]
 ──────────────────────────────────────────────
 📄 本阶段产出：
   · [产出项]
@@ -334,12 +332,12 @@ python scripts/init_project.py <slug> --mode AUTO|INTERACTIVE
 
 **SLIM 卡片**（连续确认后自动降级）：
 ```
-✅ N/7 [阶段名] 完成 · [一句话核心产出] — [1]继续 [3]暂停
+✅ N/8 [阶段名] 完成 · [一句话核心产出] — [1]继续 [3]暂停
 ```
 
 **MANDATORY 卡片**（永不跳过，标注类型）：
 ```
-🔒 阶段 N/7：[阶段名]  [MANDATORY — 完整性关卡]
+🔒 阶段 N/8：[阶段名]  [MANDATORY — 完整性关卡]
 ══════════════════════════════════════════════
 [完整 FULL 内容]
 ══════════════════════════════════════════════
@@ -360,7 +358,9 @@ python scripts/init_project.py <slug> --mode AUTO|INTERACTIVE
 | 4 literature-synthesis | Gap 列表 N 条，Related Work N 词 | "第 2 条不够具体" |
 | 5 research-planner | 候选方向 + 可行性评分 | "选方向 B 改时间表" |
 | 6 report-writer | 章节列表 + 字数 + EV 覆盖率 | "Methodology 太短" |
-| 7 science-slides | 幻灯片数 + 目录 | "封面加导师姓名" |
+| 7 claim-auditor | 已审 N 条 EV，faithful/drifted/unsupported 各几条 | "重查第 3 条结论" |
+| 8 paper-reviewer | 评审分数 + DA-CRITICAL 条数 | "DA-3 须在正文回应" |
+| 9 science-slides（可选）| 幻灯片数 + 目录 | "封面加导师姓名" |
 
 ### 验收门失败卡片（INTERACTIVE 模式）
 
@@ -560,13 +560,15 @@ python scripts/ev_manager.py <slug> gap-count state/projects/<slug>/report.md
                   ↓ 研究计划门
                   └─[Skill 6: report-writer]──→ report.md + report.html
                       ↓ 报告完整门
-                      └─[Skill 7: science-slides]──→ 开题报告.pptx
-                          ↓ PPT 结构门
-
-（可选质量保障，在 Skill 6 完成后按需触发）
-                      ├─[Skill 8: claim-auditor]──→ 引用忠实度审计报告（追加到 report.md）
-                      └─[Skill 9: paper-reviewer]─→ 同行评审报告（review/ 目录）
+                      └─[Skill 7: claim-auditor]──→ 引用忠实度审计报告（追加到 report.md）
+                          ↓ 审计完整门（强制）
+                          └─[Skill 8: paper-reviewer]─→ 同行评审报告（review/ 目录）
+                              ↓ 评审完整门（强制）
                               ↑ DA-CRITICAL 项须回应后方可通过
+
+（可选，S8 评审门通过后询问用户）
+                              └─[Skill 9: science-slides]──→ 开题报告.pptx
+                                  ↓ PPT 结构门
 ```
 
 每个 skill 可单独调用。**详细规格见各 skill 文件（`skills/<name>/SKILL.md`）。**
@@ -578,10 +580,10 @@ python scripts/ev_manager.py <slug> gap-count state/projects/<slug>/report.md
 - `基于已读论文生成文献综述` → Skill 4
 - `帮我规划实验方案` → Skill 5
 - `生成完整科研报告` → Skill 6
-- `生成开题报告 PPT` → Skill 7
-- `审计报告中的引用是否忠实原文` → Skill 8（claim-auditor）
-- `对报告进行同行评审` / `运行 Devil's Advocate` → Skill 9（paper-reviewer）
-- `快速扫描报告漏洞` → Skill 9 quick 模式（仅运行 DA，10 分钟内）
+- `审计报告中的引用是否忠实原文` → Skill 7（claim-auditor）
+- `对报告进行同行评审` / `运行 Devil's Advocate` → Skill 8（paper-reviewer）
+- `快速扫描报告漏洞` → Skill 8 quick 模式（仅运行 DA，10 分钟内）
+- `生成开题报告 PPT` → Skill 9（可选）
 
 ---
 
@@ -595,11 +597,11 @@ python scripts/ev_manager.py <slug> gap-count state/projects/<slug>/report.md
 | 4 | literature-synthesis | `skills/literature-synthesis/SKILL.md` | 论文笔记 + evidence.json | Related Work + Gap 列表 | 综述质量门 |
 | 5 | research-planner | `skills/research-planner/SKILL.md` | Gap 列表 | 实验设计 + 子问题 + 时间表 | 研究计划门 |
 | 6 | report-writer | `skills/report-writer/SKILL.md` | 全部前序产出 | report.md + report.html | 报告完整门 |
-| 7 | science-slides | `skills/science-slides/SKILL.md` | report.md | 开题报告.pptx | PPT 结构门 |
-| 8 | claim-auditor | `skills/claim-auditor/SKILL.md` | report.md + evidence.json | 审计报告（追加到 report.md） | 审计完整门 |
-| 9 | paper-reviewer | `skills/paper-reviewer/SKILL.md` | report.md | peer_review_{日期}.md | 评审完整门 |
+| 7 | claim-auditor | `skills/claim-auditor/SKILL.md` | report.md + evidence.json | 审计报告（追加到 report.md） | 审计完整门（强制） |
+| 8 | paper-reviewer | `skills/paper-reviewer/SKILL.md` | report.md | peer_review_{日期}.md | 评审完整门（强制） |
+| 9 | science-slides | `skills/science-slides/SKILL.md` | report.md | 开题报告.pptx | PPT 结构门（可选） |
 
-> S8/S9 **按需触发**，不强制纳入流水线。S9 的 DA-CRITICAL 项须在报告中明确回应后方可通过评审门。支持三种模式：`full`（5 人完整评审）/ `quick`（仅 DA 扫描）/ `methodology`（聚焦实验方法）。
+> S8 的 DA-CRITICAL 项须在报告中明确回应后方可通过评审门。支持三种模式：`full`（5 人完整评审）/ `quick`（仅 DA 扫描）/ `methodology`（聚焦实验方法）。S9 PPT 为可选阶段，S8 评审门通过后由用户决定是否生成。
 
 ---
 
