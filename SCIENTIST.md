@@ -183,12 +183,20 @@ python scripts/gate_check.py <slug> <阶段编号>
 **全局基线注册表**（`state/baselines.json`）：跨项目积累，Skill 5 规划时先查此表再搜索。
 格式：`{ "datasets": [{...}], "baselines": [{...}] }`（详见 Part III 模板）。
 
-**⚠️ arXiv API 速率限制**：请求必须**顺序执行**，每次间隔 ≥ 3 秒；**严禁并行调用**，否则全部 429。
-429 处理：等待 10 秒重试一次；仍失败改用 `web_search`。
+**⚠️ arXiv API 速率限制（严格执行）**：
+- 每次 web_fetch 调用 arXiv API 后，**必须等待 ≥ 5 秒**再发下一个请求
+- **绝对禁止**在同一 turn 内并行发起多个 arXiv 请求
+- 收到 429：立即停止，等待 **30 秒**，再重试一次（仅一次）
+- 重试仍失败：切换到 `web_search "site:arxiv.org {关键词}"` 继续，不再调用 arXiv API
 
 **⚠️ Semantic Scholar 速率限制**：无 Key 时匿名配额低，频繁调用会 429。
-429 处理：等待 15 秒重试；仍失败改用 `web_search "site:semanticscholar.org {关键词}"`。
+429 处理：等待 20 秒重试；仍失败改用 `web_search "site:semanticscholar.org {关键词}"`。
 建议申请免费 Key：https://api.semanticscholar.org/api-docs/
+
+**⚠️ DeepSeek / 模型超时（ETIMEDOUT）**：
+- 单次请求超时 → 自动重试，无需中断任务
+- 连续 2 次超时 → 在对话中告知用户"模型连接不稳定，稍后继续"，暂停当前 Skill
+- 不得因模型超时而跳过门控检查或伪造输出
 
 **搜索缓存格式**（`state/projects/<slug>/search_cache.json`）：
 ```json
