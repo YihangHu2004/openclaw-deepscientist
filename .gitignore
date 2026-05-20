@@ -13,8 +13,7 @@ state/**/*.html
 state/**/*.pptx
 
 # ═══ PPT 模板（用户私有，不上传）══════════════
-slides/templates/*.pptx
-!slides/templates/.gitkeep
+slides/templates/
 state/**/*.pdf
 state/**/*.json
 state/**/*.md
