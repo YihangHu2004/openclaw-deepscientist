@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>小科 · Workspace</title>
+  <!-- 引入 marked 用于 Markdown 渲染 -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -84,7 +86,7 @@
     .tree-item.active { background: #eef2ff; color: #1A3C8F; font-weight: 500; }
     .tree-item .icon { margin-right: 8px; font-size: 16px; }
     .tree-item.directory { font-weight: 500; }
-    .tree-item.file { padding-left: 32px; }  /* 文件比目录多缩进 */
+    .tree-item.file { padding-left: 32px; }
     .tree-children { display: none; }
     .tree-children.open { display: block; }
 
@@ -124,16 +126,82 @@
       background: #FF8C00;
       color: white;
       text-decoration: none;
-      border: none;
       border-radius: 4px;
       font-size: 15px;
       margin-top: 20px;
-      cursor: pointer;
     }
     .download-btn:hover { background: #e07b00; }
-    .download-btn:disabled { background: #aaa; cursor: not-allowed; }
     .error-msg { color: #d32f2f; }
     .loading { color: #888; }
+
+    /* Markdown 预览工具栏 */
+    .md-toolbar {
+      margin-bottom: 10px;
+      padding: 6px 10px;
+      background: #f0f0f0;
+      border-radius: 4px;
+      display: flex;
+      gap: 6px;
+    }
+    .md-toolbar button {
+      padding: 4px 12px;
+      border: 1px solid #ccc;
+      background: white;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: background 0.2s;
+    }
+    .md-toolbar button:hover { background: #e6e6e6; }
+    .md-toolbar button.active { background: #1A3C8F; color: white; border-color: #1A3C8F; }
+
+    /* Markdown 视图容器 */
+    .md-view-container {
+      display: flex;
+      min-height: 500px;
+      border: 1px solid #e0e0e0;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .md-source, .md-preview {
+      flex: 1;
+      padding: 16px;
+      overflow: auto;
+      display: none; /* 默认隐藏，由 JS 控制 */
+    }
+    .md-source {
+      background: #fafafa;
+      font-family: monospace;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .md-preview {
+      background: white;
+    }
+    /* 分屏模式 */
+    .split-mode .md-source,
+    .split-mode .md-preview {
+      display: block;
+    }
+    .split-mode .md-source {
+      border-right: 1px solid #e0e0e0;
+    }
+    /* 仅源码 */
+    .source-mode .md-source {
+      display: block;
+      width: 100%;
+    }
+    .source-mode .md-preview {
+      display: none;
+    }
+    /* 仅预览 */
+    .preview-mode .md-source {
+      display: none;
+    }
+    .preview-mode .md-preview {
+      display: block;
+      width: 100%;
+    }
   </style>
 </head>
 <body>
@@ -157,55 +225,41 @@
   </div>
 
   <script>
-    const apiBase = ''; // 同源，使用相对路径
+    const apiBase = '';
     let currentProject = '';
 
-    // --- 工具函数：拼接 API 路径 ---
     function buildPath(project, relativePath = '') {
-      // 去掉首尾多余斜杠
       const p = project.replace(/^\/+|\/+$/g, '');
       const r = relativePath.replace(/^\/+|\/+$/g, '');
       return r ? `${p}/${r}` : p;
     }
 
-    // --- 初始化：从 URL 参数读取 project ---
     function getUrlParam(name) {
       const params = new URLSearchParams(window.location.search);
       return params.get(name);
     }
 
-    // --- 渲染文件树 ---
     async function loadTree(container, project, subPath = '') {
       const fullPath = buildPath(project, subPath);
       try {
         const resp = await fetch(`${apiBase}/api/workspace/files?path=${encodeURIComponent(fullPath)}`);
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const items = await resp.json();
-
-        // 清空当前容器
         container.innerHTML = '';
-
-        // 先展示目录，再展示文件（目录按名称排序）
         const dirs = items.filter(i => i.isDirectory).sort((a,b) => a.name.localeCompare(b.name));
         const files = items.filter(i => !i.isDirectory).sort((a,b) => a.name.localeCompare(b.name));
 
-        // 渲染目录
         for (const dir of dirs) {
           const dirDiv = document.createElement('div');
           dirDiv.className = 'tree-item directory';
           dirDiv.innerHTML = `<span class="icon">📁</span> ${dir.name}`;
-          
-          // 子节点容器
           const childrenContainer = document.createElement('div');
           childrenContainer.className = 'tree-children';
-          
           dirDiv.addEventListener('click', async (e) => {
             e.stopPropagation();
-            // 切换展开/收起
             if (childrenContainer.classList.contains('open')) {
               childrenContainer.classList.remove('open');
             } else {
-              // 如果还没加载过内容，则加载
               if (childrenContainer.children.length === 0) {
                 childrenContainer.innerHTML = '<div class="loading" style="padding-left:32px;">加载中...</div>';
                 const childPath = subPath ? `${subPath}/${dir.name}` : dir.name;
@@ -214,12 +268,10 @@
               childrenContainer.classList.add('open');
             }
           });
-          
           container.appendChild(dirDiv);
           container.appendChild(childrenContainer);
         }
 
-        // 渲染文件
         for (const file of files) {
           const fileDiv = document.createElement('div');
           fileDiv.className = 'tree-item file';
@@ -227,17 +279,13 @@
                        file.name.endsWith('.pptx') ? '📊' : 
                        file.name.endsWith('.md') ? '📝' : '📄';
           fileDiv.innerHTML = `<span class="icon">${icon}</span> ${file.name}`;
-          
           const filePath = subPath ? `${subPath}/${file.name}` : file.name;
           fileDiv.addEventListener('click', (e) => {
             e.stopPropagation();
-            // 高亮当前选中
             document.querySelectorAll('.tree-item.active').forEach(el => el.classList.remove('active'));
             fileDiv.classList.add('active');
-            // 预览文件
             previewFile(project, filePath);
           });
-          
           container.appendChild(fileDiv);
         }
       } catch (err) {
@@ -245,72 +293,89 @@
       }
     }
 
-    // --- 预览文件 ---
+    // ---- Markdown 预览布局 ----
+    function setupMarkdownPreview(container, rawText) {
+      // 构建 MD 预览专用 HTML 结构
+      container.innerHTML = `
+        <div class="md-toolbar">
+          <button id="btn-source">源码</button>
+          <button id="btn-preview">预览</button>
+          <button id="btn-split" class="active">分屏</button>
+        </div>
+        <div class="md-view-container split-mode" id="md-view">
+          <pre class="md-source" id="md-source"></pre>
+          <div class="md-preview" id="md-preview"></div>
+        </div>
+      `;
+
+      // 填充内容
+      document.getElementById('md-source').textContent = rawText;
+      document.getElementById('md-preview').innerHTML = marked.parse(rawText);
+
+      // 绑定工具栏按钮事件
+      const viewContainer = document.getElementById('md-view');
+      const btnSource = document.getElementById('btn-source');
+      const btnPreview = document.getElementById('btn-preview');
+      const btnSplit = document.getElementById('btn-split');
+
+      function setMode(mode) {
+        // 清除所有模式类
+        viewContainer.classList.remove('source-mode', 'preview-mode', 'split-mode');
+        // 添加对应模式类
+        viewContainer.classList.add(mode + '-mode');
+        // 切换按钮激活状态
+        btnSource.classList.toggle('active', mode === 'source');
+        btnPreview.classList.toggle('active', mode === 'preview');
+        btnSplit.classList.toggle('active', mode === 'split');
+      }
+
+      btnSource.addEventListener('click', () => setMode('source'));
+      btnPreview.addEventListener('click', () => setMode('preview'));
+      btnSplit.addEventListener('click', () => setMode('split'));
+    }
+
     async function previewFile(project, relativePath) {
       const preview = document.getElementById('preview-area');
       const fullPath = buildPath(project, relativePath);
       const ext = relativePath.split('.').pop().toLowerCase();
       const fileUrl = `${apiBase}/api/workspace/file?path=${encodeURIComponent(fullPath)}`;
 
-      // 显示加载状态
       preview.innerHTML = '<div class="loading">加载中...</div>';
 
       if (ext === 'html') {
-        // 直接用 iframe 渲染
         preview.innerHTML = `<iframe src="${fileUrl}" sandbox="allow-same-origin allow-scripts"></iframe>`;
-      } else if (['.pptx', '.docx', '.xlsx', '.pdf', '.zip'].includes('.' + ext)) {
-        // 二进制文件：用 fetch+blob 触发下载，避免 <a download> 在中文文件名上的兼容问题
+        return;
+      }
+
+      if (ext === 'pptx') {
         const fileName = relativePath.split('/').pop();
-        const iconMap = { pptx: '📊', docx: '📝', xlsx: '📈', pdf: '📄', zip: '🗜️' };
-        const icon = iconMap[ext] || '📁';
         preview.innerHTML = `
           <div style="text-align:center;">
-            <p style="font-size:18px; margin-bottom:8px;">${icon} ${escapeHtml(fileName)}</p>
-            <p style="color:#888; margin-bottom:20px;">浏览器无法直接预览此文件，请下载后查看</p>
-            <button id="dl-btn" class="download-btn">⬇️ 下载文件</button>
-            <p id="dl-status" style="margin-top:14px; color:#888; font-size:13px;"></p>
+            <p style="font-size:16px; margin-bottom:16px;">📊 ${fileName}</p>
+            <a href="${fileUrl}" download="${fileName}" class="download-btn">⬇️ 下载 PPT 文件</a>
+            <p style="margin-top:20px; color:#888;">浏览器无法直接预览 PPT，请下载后查看</p>
           </div>`;
-        document.getElementById('dl-btn').addEventListener('click', async () => {
-          const btn = document.getElementById('dl-btn');
-          const status = document.getElementById('dl-status');
-          btn.disabled = true;
-          btn.textContent = '⏳ 下载中...';
-          status.textContent = '';
-          try {
-            const resp = await fetch(fileUrl);
-            if (!resp.ok) throw new Error(`服务器返回 ${resp.status}`);
-            const blob = await resp.blob();
-            const objUrl = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = objUrl;
-            a.download = fileName;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(objUrl);
-            btn.textContent = '✅ 下载完成';
-            status.textContent = `已保存：${fileName}`;
-          } catch (err) {
-            btn.disabled = false;
-            btn.textContent = '⬇️ 下载文件';
-            status.style.color = '#d32f2f';
-            status.textContent = `❌ 下载失败：${err.message}`;
-          }
-        });
-      } else {
-        // 其他文本文件：读取内容并显示
-        try {
-          const resp = await fetch(fileUrl);
-          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-          const text = await resp.text();
+        return;
+      }
+
+      // 其他文件：获取文本内容
+      try {
+        const resp = await fetch(fileUrl);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const text = await resp.text();
+
+        // 如果是 Markdown，使用增强预览
+        if (ext === 'md') {
+          setupMarkdownPreview(preview, text);
+        } else {
+          // 普通文本文件直接显示
           preview.innerHTML = `<pre>${escapeHtml(text)}</pre>`;
-        } catch (err) {
-          preview.innerHTML = `<div class="error-msg">❌ 读取文件失败: ${err.message}</div>`;
         }
+      } catch (err) {
+        preview.innerHTML = `<div class="error-msg">❌ 读取文件失败: ${err.message}</div>`;
       }
     }
 
-    // 简单的 HTML 转义
     function escapeHtml(text) {
       return text.replace(/&/g, '&amp;')
                  .replace(/</g, '&lt;')
@@ -318,7 +383,6 @@
                  .replace(/"/g, '&quot;');
     }
 
-    // --- 加载按钮事件 ---
     document.getElementById('load-btn').addEventListener('click', () => {
       const slug = document.getElementById('project-input').value.trim();
       if (!slug) {
@@ -331,12 +395,10 @@
       loadTree(treeContainer, currentProject);
     });
 
-    // 页面加载时自动填入 URL 参数
     window.addEventListener('DOMContentLoaded', () => {
       const projectParam = getUrlParam('project');
       if (projectParam) {
         document.getElementById('project-input').value = projectParam;
-        // 自动加载
         document.getElementById('load-btn').click();
       }
     });
