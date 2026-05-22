@@ -126,11 +126,14 @@
       background: #FF8C00;
       color: white;
       text-decoration: none;
+      border: none;
       border-radius: 4px;
       font-size: 15px;
       margin-top: 20px;
+      cursor: pointer;
     }
     .download-btn:hover { background: #e07b00; }
+    .download-btn:disabled { background: #aaa; cursor: not-allowed; }
     .error-msg { color: #d32f2f; }
     .loading { color: #888; }
 
@@ -347,14 +350,44 @@
         return;
       }
 
-      if (ext === 'pptx') {
+      if (['pptx', 'docx', 'xlsx', 'pdf', 'zip'].includes(ext)) {
         const fileName = relativePath.split('/').pop();
+        const iconMap = { pptx: '📊', docx: '📝', xlsx: '📈', pdf: '📄', zip: '🗜️' };
+        const icon = iconMap[ext] || '📁';
         preview.innerHTML = `
           <div style="text-align:center;">
-            <p style="font-size:16px; margin-bottom:16px;">📊 ${fileName}</p>
-            <a href="${fileUrl}" download="${fileName}" class="download-btn">⬇️ 下载 PPT 文件</a>
-            <p style="margin-top:20px; color:#888;">浏览器无法直接预览 PPT，请下载后查看</p>
+            <p style="font-size:18px; margin-bottom:8px;">${icon} ${escapeHtml(fileName)}</p>
+            <p style="color:#888; margin-bottom:20px;">浏览器无法直接预览此文件，请下载后查看</p>
+            <button id="dl-btn" class="download-btn">⬇️ 下载文件</button>
+            <p id="dl-status" style="margin-top:14px; color:#888; font-size:13px;"></p>
           </div>`;
+        document.getElementById('dl-btn').addEventListener('click', async () => {
+          const btn = document.getElementById('dl-btn');
+          const status = document.getElementById('dl-status');
+          btn.disabled = true;
+          btn.textContent = '⏳ 下载中...';
+          status.textContent = '';
+          try {
+            const resp = await fetch(fileUrl);
+            if (!resp.ok) throw new Error(`服务器返回 ${resp.status}`);
+            const blob = await resp.blob();
+            const objUrl = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = objUrl;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(objUrl);
+            btn.textContent = '✅ 下载完成';
+            status.textContent = `已保存：${fileName}`;
+          } catch (err) {
+            btn.disabled = false;
+            btn.textContent = '⬇️ 下载文件';
+            status.style.color = '#d32f2f';
+            status.textContent = `❌ 下载失败：${err.message}`;
+          }
+        });
         return;
       }
 
