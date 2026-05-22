@@ -23,9 +23,9 @@ STAGE_NAMES = {
     4: "literature-synthesis",
     5: "research-planner",
     6: "report-writer",
-    7: "science-slides",
-    8: "claim-auditor",
-    9: "paper-reviewer",
+    7: "claim-auditor",
+    8: "paper-reviewer",
+    9: "science-slides",
 }
 
 STATUS_ICONS = {
@@ -59,10 +59,25 @@ def format_ts(ts: str) -> str:
     return ts[:19].replace("T", " ")
 
 
+def run_doctor() -> None:
+    """Run workspace_doctor; print warnings but don't abort session restore."""
+    import subprocess
+    doctor = Path(__file__).parent / "workspace_doctor.py"
+    result = subprocess.run(
+        [sys.executable, str(doctor)],
+        capture_output=True, text=True, encoding="utf-8"
+    )
+    if result.returncode != 0:
+        print(result.stdout.strip())
+        print()  # blank line before the restore card
+
+
 def main() -> None:
     if len(sys.argv) < 2:
         print("用法：python session_restore.py <slug>", file=sys.stderr)
         sys.exit(1)
+
+    run_doctor()
 
     slug     = sys.argv[1]
     proj_dir = STATE_DIR / slug

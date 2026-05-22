@@ -1,4 +1,4 @@
-# Skill 9：paper-reviewer — 双流同行评审
+# Skill 8：paper-reviewer — 双流同行评审
 
 **触发**：report.md 完成后，用户需要获得批判性反馈；或在 report-writer + claim-auditor 之后运行。
 
@@ -150,7 +150,7 @@ DA 的任务是**主动寻找问题**，而非按维度评分：
   2. python scripts/gate_check.py <slug> 6   ← 验证修改后的报告仍通过 S6 门
   3. 在 review/ 目录追加修订记录：
        review/revision_{日期}.md（记录：哪些问题已解决 / 哪些有意保留）
-  4. improvement_counts["s9"] += 1（写入 pipeline_state.json）
+  4. improvement_counts["s8"] += 1（写入 pipeline_state.json）
 ```
 
 **改进轮次限制**：最多 3 轮。第 3 轮后若仍有 DA-CRITICAL 未解决，强制选 [3]（接受现状并注明）。
@@ -170,7 +170,7 @@ DA 的任务是**主动寻找问题**，而非按维度评分：
 
 写入 SUMMARY.md（追加）：
 ```markdown
-## 阶段 9 摘要 · {日期} · 同行评审
+## 阶段 8 摘要 · {日期} · 同行评审
 - 模式：{full / quick / methodology}
 - 总体决定：{Accept / Minor Revision / Major Revision / Reject}
 - 共识：CONSENSUS-4: N 项 / SPLIT: N 项 / DA-CRITICAL: N 项
@@ -195,19 +195,22 @@ DA 的任务是**主动寻找问题**，而非按维度评分：
 
 ```bash
 # 1. 生成共识报告后，签署物料护照
-python scripts/passport.py <slug> sign state/projects/<slug>/review/consensus.md 9
+python scripts/passport.py <slug> sign state/projects/<slug>/review/peer_review_{日期}.md 8
 
 # 2. 展示改进清单卡片，等待用户选择（见「改进循环」节）
 
 # 3a. 若选 [1]/[2]：修改报告后执行
-python scripts/passport.py <slug> sign state/projects/<slug>/report.md 9
-python scripts/gate_check.py <slug> 6    # 确认修改后报告仍通过 S6
+python scripts/passport.py <slug> sign state/projects/<slug>/report.md 8
+python scripts/gate_check.py <slug> 6    # 确认修改后报告仍通过 S6 报告完整门
 
 # 3b. 若选 [3]：在 report.md 追加「已知局限」节即可
 
-# 4. 签署修订记录
-python scripts/passport.py <slug> sign state/projects/<slug>/review/revision_{日期}.md 9
+# 4. 签署修订记录（若有改进）
+python scripts/passport.py <slug> sign state/projects/<slug>/review/revision_{日期}.md 8
+
+# 5. 运行评审完整门
+python scripts/gate_check.py <slug> 8
 ```
 
-- DA-CRITICAL 全部回应后 → 更新 TODO.md `[x] 阶段 9：同行评审（已完成改进）`
-- 接受现状后 → 更新 TODO.md `[x] 阶段 9：同行评审（已注明已知局限）`
+- DA-CRITICAL 全部回应后 → 更新 TODO.md `[x] S8：同行评审（已完成改进）`
+- 接受现状后 → 更新 TODO.md `[x] S8：同行评审（已注明已知局限）`

@@ -9,7 +9,8 @@ Exit code: 0 = PASS, 1 = FAIL
 Results are written to pipeline_state.json gate_results.
 
 Supported stages: 1, 2 (文献覆盖门), 3 (精读完整门), 4 (综述质量门),
-                  5 (研究计划门), 6 (报告完整门), 7 (PPT 结构门)
+                  5 (研究计划门), 6 (报告完整门), 7 (审计完整门),
+                  8 (评审完整门), 9 (PPT 结构门)
 """
 import argparse
 import json
@@ -28,8 +29,8 @@ GATE_NAMES = {
     "1": "文献覆盖门", "2": "文献覆盖门",
     "3": "精读完整门", "4": "综述质量门",
     "5": "研究计划门", "6": "报告完整门",
-    "7": "PPT 结构门", "8": "审计完整门",
-    "9": "评审完整门",
+    "7": "审计完整门", "8": "评审完整门",
+    "9": "PPT 结构门",
 }
 
 
@@ -192,8 +193,13 @@ def gate_5(proj_dir: Path, verbose: bool):
     project_text = read_text(proj_dir / "project.md")
 
     def section_text(header: str) -> str:
-        m = re.search(rf"###\s+{re.escape(header)}\s*\n(.*?)(?=\n###\s|\n##\s|\Z)",
-                      project_text, re.DOTALL)
+        # Match ##/###/#### headers containing the keyword (partial match).
+        # Use {{}} to produce literal braces in the rf-string (avoid f-string
+        # interpreting {2,4} as the Python tuple (2, 4)).
+        m = re.search(
+            rf"#{{2,4}}\s+[^\n]*{re.escape(header)}[^\n]*\n(.*?)(?=\n#{{2,4}}\s|\Z)",
+            project_text, re.DOTALL,
+        )
         return m.group(1).strip() if m else ""
 
     # Hypothesis with numerical indicator
@@ -305,6 +311,160 @@ def gate_6(proj_dir: Path, verbose: bool):
 
 
 def gate_7(proj_dir: Path, verbose: bool):
+    """审计完整门：读取 evidence.json audit_result 字段，验证忠实率 ≥90%。"""
+    conditions, blockers = [], []
+
+    evidence = load_json(proj_dir / "evidence.json")
+    items = evidence.get("items", [])
+
+    # All high-confidence EVs must be audited
+    high_items = [it for it in items if it.get("confidence") == "high"]
+    audited_high = [it for it in high_items if "audit_result" in it]
+    c1 = len(high_items) == 0 or len(audited_high) == len(high_items)
+    conditions.append({
+        "name": "高置信度 EV 全部已审",
+        "required": "high EV 100% 已有 audit_result",
+        "actual": f"{len(audited_high)}/{len(high_items)} 条已审",
+        "passed": c1,
+    })
+    if not c1:
+        blockers.append(f"还有 {len(high_items) - len(audited_high)} 条 high EV 未填 audit_result")
+
+    # No unsupported items allowed
+    audited_items = [it for it in items if "audit_result" in it]
+    unsupported = [it for it in audited_items if it.get("audit_result") == "unsupported"]
+    c2 = len(unsupported) == 0
+    conditions.append({
+        "name": "无根据条目",
+        "required": "unsupported = 0",
+        "actual": f"{len(unsupported)} 条 unsupported" if unsupported else "0 条",
+        "passed": c2,
+    })
+    if not c2:
+        ids = [it.get("ev_id", "?") for it in unsupported]
+        blockers.append(f"存在 unsupported EV，必须修改报告正文并标记 fixed：{', '.join(ids)}")
+
+    # Drifted items must have recommended_fix
+    drifted = [it for it in audited_items if it.get("audit_result") == "drifted"]
+    drifted_no_fix = [it for it in drifted if not it.get("recommended_fix")]
+    c3 = len(drifted_no_fix) == 0
+    conditions.append({
+        "name": "漂移条目有修改建议",
+        "required": "所有 drifted 含 recommended_fix",
+        "actual": f"{len(drifted) - len(drifted_no_fix)}/{len(drifted)} 条已给出建议"
+                  if drifted else "无漂移条目",
+        "passed": c3,
+    })
+    if not c3:
+        ids = [it.get("ev_id", "?") for it in drifted_no_fix]
+        blockers.append(f"以下 drifted EV 缺少 recommended_fix 字段：{', '.join(ids)}")
+
+    # Faithfulness rate (faithful + fixed) / total audited >= 90%
+    faithful_count = sum(
+        1 for it in audited_items if it.get("audit_result") in ("faithful", "fixed")
+    )
+    total_audited = len(audited_items)
+    faith_rate = faithful_count / total_audited if total_audited > 0 else 0.0
+    c4 = total_audited == 0 or faith_rate >= 0.90
+    conditions.append({
+        "name": "忠实率（faithful + fixed）",
+        "required": "≥90%",
+        "actual": f"{faithful_count}/{total_audited} = {faith_rate:.0%}"
+                  if total_audited > 0 else "未审计",
+        "passed": c4,
+    })
+    if not c4:
+        blockers.append(f"忠实率不足（{faith_rate:.0%}，需 ≥90%），需修正 drifted 声明后标记 fixed")
+
+    # Audit appendix must exist in report.md
+    report_text = read_text(proj_dir / "report.md")
+    has_appendix = bool(re.search(
+        r"引用忠实度审计|Citation Fidelity Audit", report_text, re.IGNORECASE
+    ))
+    conditions.append({
+        "name": "审计附录已追加",
+        "required": "report.md 含审计附录节",
+        "actual": "已追加" if has_appendix else "未找到",
+        "passed": has_appendix,
+    })
+    if not has_appendix:
+        blockers.append("report.md 中未找到审计附录（应含 '引用忠实度审计' 节）")
+
+    passed = c1 and c2 and c3 and c4 and has_appendix
+    return passed, conditions, blockers
+
+
+def gate_8(proj_dir: Path, verbose: bool):
+    """评审完整门：验证同行评审完整且 DA-CRITICAL 已处理。"""
+    conditions, blockers = [], []
+
+    review_dir = proj_dir / "review"
+    review_files = sorted(review_dir.glob("peer_review_*.md")) if review_dir.exists() else []
+
+    c1 = bool(review_files)
+    conditions.append({
+        "name": "评审文件",
+        "required": "review/peer_review_*.md 存在",
+        "actual": f"{len(review_files)} 个" if review_files else "未找到",
+        "passed": c1,
+    })
+    if not c1:
+        blockers.append("review/ 目录下无评审文件，需先运行 paper-reviewer Skill")
+
+    if review_files:
+        review_text = read_text(review_files[-1])
+
+        has_da = bool(re.search(r"DA-(CRITICAL|WARNING|PASS)", review_text))
+        conditions.append({
+            "name": "DA 裁定",
+            "required": "含 DA-CRITICAL / DA-WARNING / DA-PASS",
+            "actual": "已包含" if has_da else "未找到",
+            "passed": has_da,
+        })
+        if not has_da:
+            blockers.append("评审文件缺少 DA 裁定行（DA-CRITICAL / DA-WARNING / DA-PASS）")
+
+        has_scores = bool(re.search(r"\d\s*/\s*5", review_text))
+        conditions.append({
+            "name": "量化评分",
+            "required": "含 X/5 评分",
+            "actual": "已包含" if has_scores else "未找到",
+            "passed": has_scores,
+        })
+        if not has_scores:
+            blockers.append("评审文件缺少量化评分（格式：X/5）")
+
+        critical_count = len(re.findall(r"DA-CRITICAL", review_text))
+        if critical_count > 0:
+            ps = load_json(proj_dir / "pipeline_state.json")
+            improvement_s8 = ps.get("improvement_counts", {}).get("s8", 0)
+            revision_files = list(review_dir.glob("revision_*.md"))
+            handled = improvement_s8 > 0 or bool(revision_files)
+            conditions.append({
+                "name": "DA-CRITICAL 已处理",
+                "required": "有修订记录或改进轮次",
+                "actual": f"改进 {improvement_s8} 轮，修订记录 {len(revision_files)} 个"
+                          if handled else "未处理",
+                "passed": handled,
+            })
+            if not handled:
+                blockers.append(
+                    f"存在 {critical_count} 条 DA-CRITICAL，须返回 S6 修改后重新评审"
+                )
+        else:
+            conditions.append({
+                "name": "DA-CRITICAL",
+                "required": "无 DA-CRITICAL 或已处理",
+                "actual": "无 DA-CRITICAL",
+                "passed": True,
+            })
+
+    all_passed = all(c["passed"] for c in conditions) if conditions else False
+    return all_passed, conditions, blockers
+
+
+def gate_9(proj_dir: Path, verbose: bool):
+    """PPT 结构门：验证幻灯片文件存在且页数达标。"""
     conditions, blockers = [], []
 
     slides_dir = proj_dir / "slides"
@@ -338,7 +498,8 @@ GATE_FUNCS: dict[str, Callable] = {
     "1": gate_1_2, "2": gate_1_2,
     "3": gate_3,   "4": gate_4,
     "5": gate_5,   "6": gate_6,
-    "7": gate_7,
+    "7": gate_7,   "8": gate_8,
+    "9": gate_9,
 }
 
 
@@ -406,7 +567,7 @@ def persist(proj_dir: Path, stage: str, result: dict) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="验证研究项目阶段门控条件")
     parser.add_argument("slug",    help="项目 slug")
-    parser.add_argument("stage",   help="阶段编号（1–7）")
+    parser.add_argument("stage",   help="阶段编号（1–9）")
     parser.add_argument("--verbose", action="store_true", help="输出详细信息")
     args = parser.parse_args()
 
@@ -417,7 +578,7 @@ def main() -> None:
 
     gate_func = GATE_FUNCS.get(args.stage)
     if not gate_func:
-        print(f"❌ 不支持的阶段：{args.stage}（支持 1–7）", file=sys.stderr)
+        print(f"❌ 不支持的阶段：{args.stage}（支持 1–9）", file=sys.stderr)
         sys.exit(1)
 
     gate_name = GATE_NAMES.get(args.stage, f"Stage {args.stage} 门")

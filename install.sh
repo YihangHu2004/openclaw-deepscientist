@@ -10,16 +10,27 @@ echo "🔬 OpenClaw Scientist 安装中..."
 # ─── --update 模式：只更新框架，不碰个人数据 ─────────────────
 if [ "$1" = "--update" ]; then
   echo "📦 更新模式：仅覆盖框架文件，保留个人数据..."
-  cp -f "${SCRIPT_DIR}/SCIENTIST.md"     "${WORKSPACE_DEST}/SCIENTIST.md"
-  cp -rf "${SCRIPT_DIR}/skills/."        "${WORKSPACE_DEST}/skills/"
-  cp -f "${SCRIPT_DIR}/SOUL.md"          "${WORKSPACE_DEST}/SOUL.md"   2>/dev/null || true
-  cp -f "${SCRIPT_DIR}/AGENTS.md"        "${WORKSPACE_DEST}/AGENTS.md" 2>/dev/null || true
-  cp -f "${SCRIPT_DIR}/TOOLS.md"         "${WORKSPACE_DEST}/TOOLS.md"  2>/dev/null || true
-  cp -f "${SCRIPT_DIR}/openclaw.plugin.json" "${WORKSPACE_DEST}/openclaw.plugin.json"
+  # 身份协议文件
+  cp -f "${SCRIPT_DIR}/SCIENTIST.md"         "${WORKSPACE_DEST}/SCIENTIST.md"
+  cp -f "${SCRIPT_DIR}/AGENTS.md"            "${WORKSPACE_DEST}/AGENTS.md"   2>/dev/null || true
+  cp -f "${SCRIPT_DIR}/SOUL.md"              "${WORKSPACE_DEST}/SOUL.md"     2>/dev/null || true
+  cp -f "${SCRIPT_DIR}/TOOLS.md"             "${WORKSPACE_DEST}/TOOLS.md"    2>/dev/null || true
+  cp -f "${SCRIPT_DIR}/USER.md"              "${WORKSPACE_DEST}/USER.md"     2>/dev/null || true
+  cp -f "${SCRIPT_DIR}/IDENTITY.md"          "${WORKSPACE_DEST}/IDENTITY.md" 2>/dev/null || true
+  cp -f "${SCRIPT_DIR}/HEARTBEAT.md"         "${WORKSPACE_DEST}/HEARTBEAT.md" 2>/dev/null || true
+  # 示例配置（不覆盖用户实际配置）
+  cp -f "${SCRIPT_DIR}/USER_CONFIG.example.md"  "${WORKSPACE_DEST}/USER_CONFIG.example.md"
+  cp -f "${SCRIPT_DIR}/USER_PROFILE.example.md" "${WORKSPACE_DEST}/USER_PROFILE.example.md" 2>/dev/null || true
+  # skills / pipelines / scripts / extensions（全量覆盖框架部分）
+  cp -rf "${SCRIPT_DIR}/skills/."            "${WORKSPACE_DEST}/skills/"
+  cp -rf "${SCRIPT_DIR}/pipelines/."         "${WORKSPACE_DEST}/pipelines/" 2>/dev/null || true
+  cp -rf "${SCRIPT_DIR}/scripts/."           "${WORKSPACE_DEST}/scripts/"
+  cp -rf "${SCRIPT_DIR}/extensions/."        "${WORKSPACE_DEST}/extensions/"
+  cp -f  "${SCRIPT_DIR}/openclaw.plugin.json" "${WORKSPACE_DEST}/openclaw.plugin.json"
   echo ""
   echo "✅ 框架已更新（个人数据保留）："
-  echo "   SCIENTIST.md + skills/ 已更新"
-  echo "   USER_CONFIG.md / MEMORY.md / state/ / memory/ 未改动"
+  echo "   SCIENTIST.md + skills/ + pipelines/ + scripts/ + extensions/ 已更新"
+  echo "   USER_CONFIG.md / USER_PROFILE.md / MEMORY.md / state/ / memory/ 未改动"
   exit 0
 fi
 
@@ -27,7 +38,9 @@ fi
 
 # 1. 创建工作区目录
 mkdir -p "${WORKSPACE_DEST}/skills"
+mkdir -p "${WORKSPACE_DEST}/pipelines"
 mkdir -p "${WORKSPACE_DEST}/state/projects"
+mkdir -p "${WORKSPACE_DEST}/state/outreach"
 mkdir -p "${WORKSPACE_DEST}/memory"
 
 # 2. 复制框架文件（-n: 不覆盖已有文件）
@@ -45,11 +58,42 @@ fi
 
 # 4. 初始化空 MEMORY.md（仅首次）
 if [ ! -f "${WORKSPACE_DEST}/MEMORY.md" ]; then
-  cp "${WORKSPACE_DEST}/MEMORY.template.md" "${WORKSPACE_DEST}/MEMORY.md"
+  cat > "${WORKSPACE_DEST}/MEMORY.md" <<'MEMEOF'
+# MEMORY.md - 长期科研记忆
+
+_仅在主会话（与 DeepClaw 直接对话）中读取和更新。_
+
+## 用户研究偏好
+
+- 核心研究领域：（填入）
+- 所在机构：（填入）
+- 偏好：（填入）
+
+## 常用研究关键词
+
+_（由 DeepClaw 在搜索后自动积累）_
+
+## 常用 arXiv 类别
+
+_（由 DeepClaw 根据研究方向推荐后更新）_
+
+## 活跃项目
+
+_（由 DeepClaw 自动记录）_
+MEMEOF
+fi
+
+# 4b. 初始化用户学术画像（仅首次）
+if [ ! -f "${WORKSPACE_DEST}/USER_PROFILE.md" ] && [ -f "${WORKSPACE_DEST}/USER_PROFILE.example.md" ]; then
+  cp "${WORKSPACE_DEST}/USER_PROFILE.example.md" "${WORKSPACE_DEST}/USER_PROFILE.md"
+  echo ""
+  echo "⚠️  请填写学术画像（套磁功能必须）："
+  echo "   open ${WORKSPACE_DEST}/USER_PROFILE.md"
 fi
 
 # 5. 创建目录占位文件
 touch "${WORKSPACE_DEST}/state/projects/.gitkeep" 2>/dev/null || true
+touch "${WORKSPACE_DEST}/state/outreach/.gitkeep" 2>/dev/null || true
 touch "${WORKSPACE_DEST}/memory/.gitkeep"          2>/dev/null || true
 
 # 6. 注册 scientist agent 和 workspace-api 扩展到 openclaw.json

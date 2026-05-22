@@ -1,4 +1,4 @@
-# Skill 6：report-writer — 完整科研报告
+﻿# Skill 6：report-writer — 完整科研报告
 
 **触发**：研究规划完成，需生成完整科研提案或报告。
 
@@ -46,7 +46,7 @@
 
 ---
 
-## HTML 生成（bash_exec）
+## HTML 生成（exec）
 
 ```python
 import markdown, datetime
@@ -61,7 +61,7 @@ th{background:#f0f4ff}code{background:#f4f4f4;padding:2px 6px;border-radius:4px}
 pre{background:#f4f4f4;padding:16px;border-radius:8px;overflow-x:auto}
 blockquote{border-left:4px solid #4a90e2;padding-left:16px;color:#555}"""
 
-html = f'<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><style>{css}</style></head><body>{body}<hr><p style="color:#999;text-align:center;font-size:.85em">由小科 🔬 生成 · {datetime.date.today()}</p></body></html>'
+html = f'<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><style>{css}</style></head><body>{body}<hr><p style="color:#999;text-align:center;font-size:.85em">由DeepClaw 🦞 生成 · {datetime.date.today()}</p></body></html>'
 with open('report.html','w',encoding='utf-8') as f:
     f.write(html)
 print("report.html 已生成")
@@ -114,5 +114,5 @@ python scripts/ev_manager.py <slug> gap-count state/projects/<slug>/report.md
 python scripts/gate_check.py <slug> 6
 ```
 
-- PASS → 更新 TODO.md `[x] 阶段 6：科研报告`，进入 S7 science-slides
+- PASS → 更新 TODO.md `[x] 阶段 6：科研报告`，进入 S7 claim-auditor（强制审计）
 - FAIL → 展示缺失项，执行 SCIENTIST.md §1.6 失败处理流程（常见原因：EV 覆盖率不足或章节缺失）

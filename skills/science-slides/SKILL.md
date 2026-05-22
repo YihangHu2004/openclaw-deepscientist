@@ -1,8 +1,8 @@
-# Skill 7：science-slides — 开题报告 PPT
+# Skill 9：science-slides — 开题报告 PPT
 
 **触发**：需要生成中文学术风格开题报告 PPT，通常在 report-writer 之后使用。
 
-**依赖**：`pip install python-pptx`（通过 bash_exec 安装）
+**依赖**：`pip install python-pptx`（通过 exec 安装）
 
 ---
 

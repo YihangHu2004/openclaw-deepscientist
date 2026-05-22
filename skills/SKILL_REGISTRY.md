@@ -31,6 +31,14 @@
 |----------|------|------|------------|
 | math-analysis | [skills/math-analysis/SKILL.md](math-analysis/SKILL.md) | 统计验证 / 效应量 / 符号数学（numpy/scipy/sympy） | LLM 判断需要定量验证或数学推导时 |
 
+## 套磁 Skill（关键词强触发）
+
+| Skill ID | 文件 | 职责 | 触发关键词 |
+|----------|------|------|----------|
+| outreach | [skills/outreach/SKILL.md](outreach/SKILL.md) | 教授调研 + 画像构建 + 邮件起草 + 质量门 | 套磁/套瓷/联系老师/联系教授/找导师/找RA/outreach/professor/faculty/申请邮件 |
+
+**⚠️ 强触发规则**：用户消息含上述任意关键词 → 必须先进入 outreach Skill Step 0（项目初始化），禁止直接开始研究或生成邮件。
+
 ---
 
 ## 调用说明

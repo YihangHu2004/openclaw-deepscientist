@@ -6,14 +6,21 @@
 
 | 场景 | 用哪个 |
 |------|--------|
-| 自然语言问题（"积分 x²sinx"、"解方程组"、"单位换算"） | `wolfram/wolfram_query` MCP 工具 |
-| 需要分步推导过程 | `wolfram/wolfram_full` MCP 工具 |
-| 验证两个表达式是否等价 | `wolfram/wolfram_check_equation` MCP 工具 |
+| 自然语言问题（"积分 x²sinx"、"解方程组"、"单位换算"） | `wolfram__wolfram_query` |
+| 需要分步推导过程 | `wolfram__wolfram_full` |
+| 验证两个表达式是否等价 | `wolfram__wolfram_check_equation` |
 | 从论文汇总统计重现 p 值 / 置信区间 | exec + scipy（见 A） |
 | 计算效应量 / 相对提升 | exec + numpy（见 B） |
 | 符号推导（需要精确控制变量/假设） | exec + sympy（见 C） |
 
-**优先用 Wolfram MCP**：自然语言直接问，返回快、结果准。exec + Python 用于需要精确数值重现或 Wolfram 无法处理的自定义统计场景。
+**优先用 Wolfram 工具**（`wolfram__wolfram_query` / `wolfram__wolfram_full` / `wolfram__wolfram_check_equation`）：自然语言直接问，返回快、结果准。exec + Python 用于需要精确数值重现或 Wolfram 无法处理的自定义统计场景。
+
+**⚠️ Wolfram 工具已知限制**：
+- ❌ **不支持 PDE 求解**（如 `u_t = u_xx`）
+- ❌ **不支持抽象 Σ 求和符号**（如 `sum_j exp(x_j/T)`）
+- ❌ **不支持自定义函数/多步编程**
+- ✅ **能用** ODE 求解、具体导数/积分/展开、方程验证
+- 遇到以上限制时降级至 Python SymPy 或 scipy（见 C / A 节）
 
 ---
 
@@ -87,5 +94,5 @@ print(limit(sin(x)/x, x, 0))
 
 - 验证论文数值声明时用 **A**（exec + scipy，精确重现）
 - 判断效果大小（不仅看 p 值）时用 **B**
-- 推导/核查公式时：简单问题用 `wolfram_query`，复杂推导用 **C**（sympy，可精确控制假设）
+- 推导/核查公式时：简单问题用 `wolfram__wolfram_query`，复杂推导用 **C**（sympy，可精确控制假设）
 - 结果若与论文出入 >10%，在 report.md 对应位置标注 `[MATERIAL GAP: 数值无法重现]`

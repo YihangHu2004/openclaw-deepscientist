@@ -1,9 +1,9 @@
-# USER_CONFIG.md — 个人配置（本地，不入 Git）
+﻿# USER_CONFIG.md — 个人配置（本地，不入 Git）
 # 复制本文件为 USER_CONFIG.md 后填写个人信息
 
 ## 用户信息
 
-- **称呼**: 你的昵称（小科在对话中使用）
+- **称呼**: 你的昵称（DeepClaw在对话中使用）
 - **时区**: Asia/Shanghai
 - **机构**: 你的学校 / 单位
 - **邮箱**: your-email@example.com
@@ -16,7 +16,12 @@
   ↑ 申请地址：https://api.semanticscholar.org/api-docs/
   ↑ 不填则使用匿名模式（每分钟约 100 次请求，容易触发 429）
 
-## 研究背景（可选，帮助小科提供更精准建议）
+- **Bright Data API Token**: 
+  ↑ 用于 LinkedIn 套磁调研：教授档案 / 课题组校友去向 / LinkedIn 动态
+  ↑ 注册地址：https://brightdata.com → 控制台 → API Token
+  ↑ 新账号有 20 次免费额度；不填则 O1d 退回 web_search 策略
+
+## 研究背景（可选，帮助DeepClaw提供更精准建议）
 
 - **当前课题**: 
 - **导师 / 团队**: 

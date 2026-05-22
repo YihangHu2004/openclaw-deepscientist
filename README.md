@@ -1,4 +1,4 @@
-# OpenClaw Scientist 🔬
+﻿# OpenClaw Scientist 🔬
 
 > 深度科研 Agent for [OpenClaw](https://openclaw.ai) — 文献漏斗 + 证据链追踪 + 双模式流水线 + 开题 PPT 生成
 
@@ -6,7 +6,7 @@
 
 ## 功能概览
 
-OpenClaw Scientist（小科）是一个完整的科研辅助 Agent，覆盖从主题确定到开题答辩 PPT 的全流程：
+OpenClaw Scientist（DeepClaw）是一个完整的科研辅助 Agent，覆盖从主题确定到开题答辩 PPT 的全流程：
 
 ```
 用户提出研究主题
@@ -196,13 +196,13 @@ bash install.sh --update
 
 ## 使用
 
-重启 OpenClaw 后，在对话框输入 `@scientist` 切换到小科：
+重启 OpenClaw 后，在对话框输入 `@scientist` 切换到DeepClaw：
 
 ```
 @scientist 帮我研究 Chain-of-Thought Reasoning 的最新进展
 ```
 
-小科会询问运行模式（AUTO / INTERACTIVE），然后开始文献搜索。
+DeepClaw会询问运行模式（AUTO / INTERACTIVE），然后开始文献搜索。
 
 **质量评审**（S6 完成后自动进入）：
 ```

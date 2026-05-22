@@ -28,9 +28,9 @@ STAGE_NAMES = {
     4: "literature-synthesis",
     5: "research-planner",
     6: "report-writer",
-    7: "science-slides",
-    8: "claim-auditor",
-    9: "paper-reviewer",
+    7: "claim-auditor",        # 强制
+    8: "paper-reviewer",       # 强制
+    9: "science-slides",       # 可选
 }
 
 
@@ -137,9 +137,9 @@ def init_project(slug: str, mode: str) -> None:
 - [ ] 阶段 4：文献综述（literature-synthesis）
 - [ ] 阶段 5：研究规划（research-planner）
 - [ ] 阶段 6：科研报告（report-writer）
-- [ ] 阶段 7：开题 PPT（science-slides）
-- [ ] 阶段 8：引用审计（claim-auditor，可选）
-- [ ] 阶段 9：同行评审（paper-reviewer，可选）
+- [ ] 阶段 7：引用审计（claim-auditor，强制）
+- [ ] 阶段 8：同行评审（paper-reviewer，强制）
+- [ ] 阶段 9：开题 PPT（science-slides，可选）
 """
     (proj_dir / "TODO.md").write_text(todo_md, encoding="utf-8")
 

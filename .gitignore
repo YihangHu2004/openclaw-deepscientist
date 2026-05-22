@@ -1,12 +1,16 @@
 # ═══ 个人配置（绝不入 Git）════════════════════════
 USER_CONFIG.md
+USER_PROFILE.md
 MEMORY.md
 memory/*
 !memory/.gitkeep
+search_cache.json
 
 # ═══ 研究数据（本地私有，永不上传）══════════════
 state/projects/*/
 !state/projects/.gitkeep
+state/outreach/*/
+!state/outreach/.gitkeep
 
 # ═══ 所有生成文件（报告、PPT、HTML）══════════════
 state/**/*.html
