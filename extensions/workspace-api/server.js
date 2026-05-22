@@ -74,9 +74,12 @@ app.get('/api/workspace/file', async (req, res) => {
       '.zip': 'application/zip',
     }[ext] || 'application/octet-stream';
 
+    // RFC 6266: filename* 支持中文等非 ASCII 文件名
+    const encodedName = encodeURIComponent(fileName);
+    const asciiName   = fileName.replace(/[^\x20-\x7E]/g, '_'); // 旧浏览器 fallback
     res.writeHead(200, {
       'Content-Type': mime,
-      'Content-Disposition': `attachment; filename="${encodeURIComponent(fileName)}"`,
+      'Content-Disposition': `attachment; filename="${asciiName}"; filename*=UTF-8''${encodedName}`,
       'Content-Length': stat.size,
     });
 
