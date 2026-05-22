@@ -2,6 +2,64 @@
 
 All notable changes to OpenClaw Scientist will be documented here.
 
+## [0.9.0] - 2026-05-22
+
+### 新增：套磁（Outreach）完整流水线
+
+**核心流程 O0–O5**（`pipelines/outreach.md`）
+
+- **STEP 0**：项目初始化（slug 确认 → `init_outreach.py` → 教授联系人录入）
+- **O1a**：主页与邮箱抓取（主页 / 邮箱 / 招生状态）
+- **O1b**：论文重要性评分（`paper_score = 0.35×时间 + 0.30×作者位置 + 0.20×期刊档次 + 0.15×引用率`）→ top-3 研究主线聚类
+- **O1c**：实验室风格推断（engineering / theory / interdisciplinary）
+- **O1d**：软信号深度调研 + 流言板（平台特异策略：Twitter / Reddit / YouTube / 新闻 / LinkedIn / NSF）
+- **O1.5**：邮箱确认 HARD STOP（用户确认后 `verify-email`）
+- **O2**：用户画像匹配（`USER_PROFILE.md` × 教授研究主线 → ≥2 具体交集）
+- **O3**：邮件起草（风格 A 技术对等 / B 学术正式 / C 探索合作）
+- **O4**：质量门（字数 / 套话黑名单 / 专有名词 / 邮箱验证）
+- **O5**：用户审阅 → `mark-sent` / 修改循环
+
+**新增脚本**
+
+- `scripts/init_outreach.py <slug>`：初始化 `state/outreach/<slug>/` 目录结构
+- `scripts/outreach_manager.py <slug> <cmd>`：联系人 CRUD + note / profile / rumor / verify-email / mark-sent / stats
+- `scripts/outreach_gate_check.py <slug> G3 <CTX-xxx>`：邮件 G3 质量门（5 项检查）
+- `scripts/linkedin_scraper.py <slug> <CTX-xxx> <cmd>`：Bright Data LinkedIn API 封装（profile / alumni / posts），无 Token 时优雅跳过
+- `scripts/intent_router.py`：关键词意图分发路由
+- `scripts/workspace_doctor.py`：工作区健康检查
+
+**流言板（Rumor Board）**
+
+- 10 种信号来源类型（homepage / blog / twitter / reddit / youtube / news / linkedin / ratemyprofessors / researchgate / nsfgrant）
+- 9 个相关维度（openings / mentorship / personality / workload / funding / collaboration / research_direction / lab_culture / location）
+- 每条信号实时落盘，不可攒批
+
+**其他更新**
+
+- `skills/outreach/SKILL.md`：套磁 Skill 规格文档
+- `USER_PROFILE.example.md`：用户学术画像模板（套磁 O2 匹配必须）
+- `USER_CONFIG.example.md`：新增 `Bright Data API Token` 字段
+- `.gitignore`：新增 `USER_PROFILE.md`、`search_cache.json`、`state/outreach/*/`
+- `state/outreach/.gitkeep`：确保 fresh-clone 后目录存在
+
+**`install.sh` 修复**
+
+- `MEMORY.template.md` 已删除 → 改用内联 heredoc 生成 MEMORY.md
+- 新增 `USER_PROFILE.md` 首次初始化步骤
+- 新增 `state/outreach/` 目录创建
+- `--update` 模式扩展：覆盖全部框架文件（`scripts/`、`pipelines/`、`extensions/`、所有身份协议文件）
+
+**身份协议文件统一**
+
+- `AGENTS.md / SOUL.md / TOOLS.md / USER.md / IDENTITY.md / HEARTBEAT.md` 全部改写为薄重定向，指向 `SCIENTIST.md` 对应章节，消除 OpenClaw 默认模板覆盖 `SCIENTIST.md` 的问题
+
+**`SCIENTIST.md` 意图检测升级（§1.2）**
+
+- 套磁关键词内联 STEP 0（0-A/0-B/0-C）+ 明确 exec 命令，消除 "加载 SKILL.md" 的歧义
+- 新增平台搜索策略表（✅/⚠️/❌ 各平台登录墙感知）
+
+---
+
 ## [0.8.2] - 2026-05-20
 ### 修复：Windows 系统文件下载返回 NotFoundError
 **问题**：`server.js` 的 `/api/workspace/file` 端点使用 `Express` 的 `res.download` 方法，其底层依赖
