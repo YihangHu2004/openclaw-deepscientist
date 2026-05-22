@@ -1,6 +1,6 @@
 ﻿# OpenClaw Scientist 🔬
 
-> 深度科研 Agent for [OpenClaw](https://openclaw.ai) — 文献漏斗 + 证据链追踪 + 双模式流水线 + 开题 PPT 生成
+> 深度科研 Agent for [OpenClaw](https://openclaw.ai) — 文献漏斗 + 证据链追踪 + 双模式流水线 + 开题 PPT 生成 + 套磁邮件流水线
 
 ---
 
@@ -80,11 +80,15 @@ report.md §2 第 3 段："该模型准确率达 94.2% [EV-001]"
 
 ```
 scripts/
-├── init_project.py    # 初始化完整项目文件结构（新项目必须通过此脚本启动）
-├── gate_check.py      # 读取实际文件计算门控条件，PASS/FAIL 写入 pipeline_state.json
-├── ev_manager.py      # 管理 evidence.json（增/查/覆盖率/gap统计）
-├── passport.py        # SHA256 内容哈希 + 物料护照验证（跨会话完整性）
-└── session_restore.py # 跨会话状态恢复卡片
+├── init_project.py       # 初始化完整项目文件结构（新项目必须通过此脚本启动）
+├── gate_check.py         # 读取实际文件计算门控条件，PASS/FAIL 写入 pipeline_state.json
+├── ev_manager.py         # 管理 evidence.json（增/查/覆盖率/gap统计）
+├── passport.py           # SHA256 内容哈希 + 物料护照验证（跨会话完整性）
+├── session_restore.py    # 跨会话状态恢复卡片
+├── init_outreach.py      # 初始化套磁项目目录结构
+├── outreach_manager.py   # 联系人 CRUD + 调研笔记 + 流言板 + 状态追踪
+├── outreach_gate_check.py # 邮件 G3 质量门（5 项检查）
+└── linkedin_scraper.py   # Bright Data LinkedIn API 封装（无 Token 时优雅跳过）
 ```
 
 ```bash
@@ -106,6 +110,37 @@ python scripts/session_restore.py my-project
 ```
 
 所有脚本仅依赖 Python 3.9+ stdlib，无需额外安装。
+
+### 套磁流水线（v0.9.0 新增）
+
+端到端教授联系工作流，覆盖调研 → 画像匹配 → 邮件起草 → 质量门控：
+
+```
+用户说"套磁 / cold email / 联系教授..."
+  └─> STEP 0  项目初始化（slug → init_outreach.py → 录入教授信息）
+      └─> O1a  主页抓取（邮箱 / 招生状态 / 实验室规模）
+          └─> O1b  论文重要性评分 → top-3 研究主线聚类
+              └─> O1c  实验室风格推断（工程 / 理论 / 交叉）
+                  └─> O1d  软信号深度调研 + 流言板
+                           （Twitter / Reddit / YouTube / 新闻 / LinkedIn / NSF）
+                      └─> O1.5  邮箱确认 HARD STOP（用户必须确认）
+                          └─> O2  USER_PROFILE.md × 研究主线 → ≥2 具体交集
+                              └─> O3  邮件起草（风格 A 技术对等 / B 学术正式 / C 探索合作）
+                                  └─> O4  G3 质量门（字数 / 套话黑名单 / 专有名词 / 邮箱验证）
+                                      └─> O5  用户审阅 → mark-sent / 修改循环
+```
+
+**论文重要性评分**：`paper_score = 0.35×时间 + 0.30×作者位置 + 0.20×期刊档次 + 0.15×引用率`
+
+**流言板（Rumor Board）**：10 种软信号来源（主页 / Twitter / Reddit / LinkedIn / NSF 等），9 个相关维度（招生 / 导师风格 / 经费 / 课题组文化等），每条信号实时落盘。
+
+**LinkedIn 集成**（可选）：填写 `Bright Data API Token` 后自动抓取教授档案 / PhD 校友去向 / 近期动态；无 Token 时自动退回 web_search 策略。
+
+```bash
+# 触发方式（在 @scientist 对话中输入任意套磁关键词即可）
+@scientist 帮我给 MIT 的 Prof. X 写套磁邮件
+@scientist 我要联系教授申请 RA
+```
 
 ### MCP 工具层（v0.8.0 新增）
 
@@ -174,14 +209,15 @@ git pull
 bash install.sh --update
 ```
 
-`--update` 模式只覆盖 `SCIENTIST.md` 和 `skills/`，**不会触碰** `USER_CONFIG.md`、`MEMORY.md`、`state/` 中的研究数据。
+`--update` 模式覆盖所有框架文件（`SCIENTIST.md`、`skills/`、`pipelines/`、`scripts/`、`extensions/`、身份协议文件），**不会触碰** `USER_CONFIG.md`、`USER_PROFILE.md`、`MEMORY.md`、`state/` 中的个人数据。
 
 ---
 
 ## 配置
 
-安装完成后，编辑 `~/.openclaw/workspace-scientist/USER_CONFIG.md`：
+安装完成后，编辑以下两个配置文件（均已 gitignore，不会上传）：
 
+**`~/.openclaw/workspace-scientist/USER_CONFIG.md`**（必填）：
 ```markdown
 ## 用户信息
 - 称呼: 你的昵称
@@ -190,6 +226,23 @@ bash install.sh --update
 
 ## API Keys（可选）
 - Semantic Scholar Key: xxx      ← 有则限流更少
+- Bright Data API Token: xxx     ← 用于 LinkedIn 套磁调研（无则退回 web_search）
+```
+
+**`~/.openclaw/workspace-scientist/USER_PROFILE.md`**（套磁功能必填）：
+```markdown
+## 研究方向
+LLM reasoning / multimodal learning / ...
+
+## 代表性项目 / 论文
+- 项目A：一句话描述
+
+## 技能
+Python, PyTorch, CUDA, ...
+
+## 目标
+- 场景：PhD / RA
+- 开始时间：2027 秋
 ```
 
 ---
@@ -293,9 +346,9 @@ npm install
 
 | 层 | 内容 | 是否入 Git |
 |----|------|-----------|
-| 公开层 | SCIENTIST.md + skills/ | ✅ |
-| 本地配置层 | USER_CONFIG.md + MEMORY.md | ❌（gitignored） |
-| 研究数据层 | state/projects/ + 报告/PPT | ❌（gitignored） |
+| 公开框架层 | SCIENTIST.md + skills/ + pipelines/ + scripts/ | ✅ |
+| 本地配置层 | USER_CONFIG.md + USER_PROFILE.md + MEMORY.md | ❌（gitignored） |
+| 研究数据层 | state/projects/ + state/outreach/ + 报告/PPT | ❌（gitignored） |
 
 **请勿将 `openclaw.json`（含 API 密钥）提交到 Git。**
 
@@ -328,7 +381,7 @@ npm install
 
 ## 版本
 
-当前版本：**v0.8.1**（2026-05-19）
+当前版本：**v0.9.0**（2026-05-22）
 
 详见 [CHANGELOG.md](CHANGELOG.md)。
 
