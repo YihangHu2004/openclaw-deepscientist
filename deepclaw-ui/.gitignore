@@ -1,0 +1,22 @@
+# Debug/development scripts
+server/analyze-js*.js
+server/debug-*.js
+server/test-ws.js
+server/verify-sig.js
+
+# Dependencies
+server/node_modules/
+client/node_modules/
+
+# Next.js build output
+client/.next/
+client/out/
+client/*.tsbuildinfo
+client/next-env.d.ts
+
+# Env (contains server URL, not secrets, but keep clean)
+client/.env.local
+
+# Misc
+.DS_Store
+*.log

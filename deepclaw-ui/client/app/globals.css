@@ -1,0 +1,149 @@
+/* ── Google Fonts — must precede all other rules ───────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500&display=swap');
+
+@import "tailwindcss";
+
+/* ── CSS Variables ─────────────────────────────────────────────────────────── */
+:root {
+  --font-brand: 'Space Grotesk', Inter, sans-serif;
+  --font-ui:    Inter, 'Noto Sans SC', sans-serif;
+  --font-mono:  'JetBrains Mono', 'Fira Code', monospace;
+
+  --dc-teal:          #0a7ea4;
+  --dc-teal-light:    #0ea5c9;
+  --dc-teal-dark:     #0369a1;
+  --dc-cyan:          #22d3ee;
+  --dc-sidebar:       #0f172a;
+  --dc-sidebarbg:     #1e293b;
+  --dc-sidebarhl:     #334155;
+  --dc-chat:          #f8fafc;
+  --dc-files:         #f1f5f9;
+  --dc-border:        #e2e8f0;
+  --dc-muted:         #64748b;
+  --dc-tool-bg:       #1e293b;
+  --dc-tool-text:     #94a3b8;
+  --dc-tool-accent:   #22d3ee;
+}
+
+/* ── Reset ──────────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; padding: 0; }
+body {
+  font-family: var(--font-ui);
+  background: var(--dc-chat);
+  color: #0f172a;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Custom scrollbar ───────────────────────────────────────────────────────── */
+.dc-scroll::-webkit-scrollbar { width: 4px; height: 4px; }
+.dc-scroll::-webkit-scrollbar-track { background: transparent; }
+.dc-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 999px; }
+.dc-scroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+.dc-scroll-dark::-webkit-scrollbar-thumb { background: #334155; }
+.dc-scroll-dark::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+/* ── Message animations ─────────────────────────────────────────────────────── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.msg-enter { animation: fadeUp 0.2s ease-out; }
+
+/* ── Typing cursor ──────────────────────────────────────────────────────────── */
+@keyframes cursorBlink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+.typing-cursor::after {
+  content: '|';
+  display: inline-block;
+  margin-left: 1px;
+  animation: cursorBlink 1s step-end infinite;
+  color: var(--dc-teal);
+}
+
+/* ── Pulsing dot (agent active) ─────────────────────────────────────────────── */
+@keyframes pulseDot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.4; transform: scale(0.75); }
+}
+.pulse-dot { animation: pulseDot 1.5s ease-in-out infinite; }
+
+/* ── Markdown prose ─────────────────────────────────────────────────────────── */
+.dc-prose {
+  font-size: 0.9rem;
+  line-height: 1.7;
+  color: #1e293b;
+}
+.dc-prose h1, .dc-prose h2, .dc-prose h3 {
+  font-family: var(--font-brand);
+  font-weight: 600;
+  margin: 1em 0 0.4em;
+  color: #0f172a;
+}
+.dc-prose h1 { font-size: 1.2em; }
+.dc-prose h2 { font-size: 1.05em; }
+.dc-prose h3 { font-size: 0.95em; }
+.dc-prose p  { margin: 0.5em 0; }
+.dc-prose ul, .dc-prose ol { padding-left: 1.4em; margin: 0.4em 0; }
+.dc-prose li { margin: 0.2em 0; }
+.dc-prose a  { color: var(--dc-teal); text-decoration: underline; }
+.dc-prose blockquote {
+  border-left: 3px solid var(--dc-teal);
+  padding-left: 0.8em;
+  color: var(--dc-muted);
+  margin: 0.6em 0;
+  font-style: italic;
+}
+.dc-prose code {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  background: #f1f5f9;
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  color: #0369a1;
+}
+.dc-prose pre {
+  background: #0f172a;
+  border-radius: 8px;
+  padding: 1em;
+  overflow-x: auto;
+  margin: 0.8em 0;
+}
+.dc-prose pre code {
+  background: transparent;
+  color: #e2e8f0;
+  padding: 0;
+  font-size: 0.82em;
+}
+.dc-prose table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85em;
+  margin: 0.6em 0;
+}
+.dc-prose th {
+  background: #f1f5f9;
+  padding: 6px 10px;
+  text-align: left;
+  font-weight: 600;
+  border-bottom: 2px solid var(--dc-border);
+}
+.dc-prose td {
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--dc-border);
+}
+.dc-prose img { max-width: 100%; border-radius: 6px; }
+
+/* ── Tool call code ─────────────────────────────────────────────────────────── */
+.tool-code {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--dc-tool-text);
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 200px;
+  overflow-y: auto;
+}

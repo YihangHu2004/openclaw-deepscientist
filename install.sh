@@ -21,15 +21,20 @@ if [ "$1" = "--update" ]; then
   # 示例配置（不覆盖用户实际配置）
   cp -f "${SCRIPT_DIR}/USER_CONFIG.example.md"  "${WORKSPACE_DEST}/USER_CONFIG.example.md"
   cp -f "${SCRIPT_DIR}/USER_PROFILE.example.md" "${WORKSPACE_DEST}/USER_PROFILE.example.md" 2>/dev/null || true
-  # skills / pipelines / scripts / extensions（全量覆盖框架部分）
+  # skills / pipelines / scripts / extensions / deepclaw-ui（全量覆盖框架部分）
   cp -rf "${SCRIPT_DIR}/skills/."            "${WORKSPACE_DEST}/skills/"
   cp -rf "${SCRIPT_DIR}/pipelines/."         "${WORKSPACE_DEST}/pipelines/" 2>/dev/null || true
   cp -rf "${SCRIPT_DIR}/scripts/."           "${WORKSPACE_DEST}/scripts/"
   cp -rf "${SCRIPT_DIR}/extensions/."        "${WORKSPACE_DEST}/extensions/"
   cp -f  "${SCRIPT_DIR}/openclaw.plugin.json" "${WORKSPACE_DEST}/openclaw.plugin.json"
+  # deepclaw-ui 源码（不覆盖 node_modules）
+  if [ -d "${SCRIPT_DIR}/deepclaw-ui" ]; then
+    rsync -a --exclude='node_modules' --exclude='.next' --exclude='out' \
+      "${SCRIPT_DIR}/deepclaw-ui/" "${WORKSPACE_DEST}/deepclaw-ui/"
+  fi
   echo ""
   echo "✅ 框架已更新（个人数据保留）："
-  echo "   SCIENTIST.md + skills/ + pipelines/ + scripts/ + extensions/ 已更新"
+  echo "   SCIENTIST.md + skills/ + pipelines/ + scripts/ + extensions/ + deepclaw-ui/ 已更新"
   echo "   USER_CONFIG.md / USER_PROFILE.md / MEMORY.md / state/ / memory/ 未改动"
   exit 0
 fi
@@ -164,12 +169,41 @@ else
   echo "   cd ${EXT_DIR} && npm install"
 fi
 
+# 9. 安装 DeepClaw UI（对话界面）
+DCUI_SERVER="${WORKSPACE_DEST}/deepclaw-ui/server"
+DCUI_CLIENT="${WORKSPACE_DEST}/deepclaw-ui/client"
+if command -v npm &>/dev/null; then
+  if [ -d "${DCUI_SERVER}" ]; then
+    echo ""
+    echo "📦 安装 DeepClaw UI 服务端依赖..."
+    npm install --prefix "${DCUI_SERVER}" --silent
+    echo "✅ DeepClaw UI 服务端依赖已安装"
+  fi
+  if [ -d "${DCUI_CLIENT}" ]; then
+    echo ""
+    echo "📦 安装 DeepClaw UI 前端依赖..."
+    npm install --prefix "${DCUI_CLIENT}" --silent
+    echo "✅ DeepClaw UI 前端依赖已安装"
+  fi
+else
+  echo "⚠️  未找到 npm，请手动安装 DeepClaw UI 依赖："
+  echo "   cd ${DCUI_SERVER} && npm install"
+  echo "   cd ${DCUI_CLIENT} && npm install"
+fi
+
 echo ""
 echo "✅ 安装完成！"
 echo ""
 echo "下一步："
 echo "  1. 填写个人配置：${WORKSPACE_DEST}/USER_CONFIG.md"
 echo "  2. 重启 OpenClaw：openclaw gateway restart"
-echo "  3. 启动文件浏览器：node ${EXT_DIR}/server.js"
-echo "     访问：http://127.0.0.1:18790"
+echo "  3. 启动 DeepClaw 对话界面（二选一）："
+echo "     开发模式（热更新）："
+echo "       node ${DCUI_SERVER}/index.js &"
+echo "       cd ${DCUI_CLIENT} && npm run dev"
+echo "       访问：http://localhost:3000"
+echo "     生产模式："
+echo "       cd ${DCUI_CLIENT} && npm run build"
+echo "       node ${DCUI_SERVER}/index.js"
+echo "       访问：http://127.0.0.1:19000"
 echo "  4. 输入 @scientist 开始使用"
