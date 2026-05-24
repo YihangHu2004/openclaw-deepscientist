@@ -267,15 +267,87 @@ DeepClaw会询问运行模式（AUTO / INTERACTIVE），然后开始文献搜索
 
 ---
 
-## Workspace 文件浏览器
+## DeepClaw UI（对话界面，v0.10.0 新增）
 
-独立于 OpenClaw 网关的轻量文件服务器，运行在端口 18790，用于浏览和预览研究产出文件。
+现代化三面板对话界面，运行在端口 **19000**，提供：
+- 左侧：Session 列表（历史对话切换）
+- 中间：实时流式对话区（支持 Markdown、工具调用折叠、思考过程展示）
+- 右侧：Workspace 文件浏览器（在线预览 / 下载研究产出）
+
+### 架构说明
+
+```
+OpenClaw 网关 :18789   ←  @scientist 对话（WebSocket）
+DeepClaw UI   :19000   ←  对话 + 文件浏览器（代理服务器）
+```
+
+代理服务器（`deepclaw-ui/server/index.js`）持有设备密钥，完成 **Ed25519 签名认证**后代表浏览器访问网关，浏览器无需接触 token。
+
+### 前提条件
+
+- 本机已完成 OpenClaw 设备配对（即 `~/.openclaw/identity/device.json` 存在）
+- Node.js 18+
+- 已启动 OpenClaw 网关（`openclaw gateway start`）
+
+### 快速启动
+
+**生产模式**（推荐）：
+
+```bash
+cd ~/.openclaw/workspace-scientist/deepclaw-ui
+
+# 首次：构建前端
+cd client && npm install && npm run build && cd ..
+
+# 启动代理服务器（同时托管前端静态文件）
+node server/index.js
+
+# 访问
+open http://127.0.0.1:19000
+```
+
+**开发模式**（热更新）：
+
+```bash
+# 终端 1：代理服务器
+node ~/.openclaw/workspace-scientist/deepclaw-ui/server/index.js
+
+# 终端 2：Next.js 开发服务器
+cd ~/.openclaw/workspace-scientist/deepclaw-ui/client
+npm run dev   # 端口 3000，自动代理 API 到 19000
+```
+
+### 依赖安装
+
+`bash install.sh` 会自动安装（步骤 9）。若手动安装：
+
+```bash
+cd ~/.openclaw/workspace-scientist/deepclaw-ui
+npm install --prefix server
+npm install --prefix client
+```
+
+### 更新
+
+```bash
+git pull && bash install.sh --update
+# --update 模式会通过 rsync 同步 deepclaw-ui/（排除 node_modules）
+```
+
+---
+
+## Workspace 文件浏览器（轻量版，端口 18790）
+
+独立于 OpenClaw 网关的轻量文件服务器，运行在端口 18790，用于浏览和预览研究产出文件。无需认证，适合团队共享访问。
+
+> **注意**：DeepClaw UI（:19000）内置了功能更完整的文件浏览器。:18790 作为轻量独立选项保留。
 
 ### 架构说明
 
 ```
 OpenClaw 网关 :18789   ←  @scientist 对话
-Workspace UI  :18790   ←  文件浏览器（独立进程）
+Workspace UI  :18790   ←  文件浏览器（独立进程，无需登录）
+DeepClaw UI   :19000   ←  对话 + 文件浏览器（需设备配对）
 ```
 
 两者完全独立。Workspace UI 不需要登录，仅限本机访问（127.0.0.1）。
@@ -376,12 +448,13 @@ npm install
 - **数学计算 MCP**: scipy（统计检验）+ sympy（符号运算）+ Wolfram Alpha LLM API
 - **学术云服务 MCP**: Academic Free MCP Servers（搜索 / 写作 / 图表 / 排版）
 - **Workspace 文件浏览器**: Node.js + Express（独立服务，端口 18790）
+- **DeepClaw UI**: Next.js 15 + React 19 + Tailwind CSS + Node.js 代理服务器（端口 19000，Ed25519 设备认证）
 
 ---
 
 ## 版本
 
-当前版本：**v0.9.0**（2026-05-22）
+当前版本：**v0.10.0**（2026-05-24）
 
 详见 [CHANGELOG.md](CHANGELOG.md)。
 
