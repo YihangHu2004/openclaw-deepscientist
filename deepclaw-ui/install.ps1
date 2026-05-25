@@ -126,14 +126,17 @@ Write-Host ""
 Write-Host "  ─────────────────────────────────────" -ForegroundColor DarkGray
 
 if ($Dev) {
-    Write-Host "  Starting in DEV mode" -ForegroundColor Cyan
-    Write-Host "  Proxy server : http://127.0.0.1:19000" -ForegroundColor DarkGray
-    Write-Host "  Frontend     : http://localhost:3000  (hot reload)" -ForegroundColor DarkGray
+    # Dev mode: server auto-spawns Next.js in dev mode (no build found → uses `next dev`).
+    # Delete BUILD_ID so the server picks dev mode even if a stale build exists.
+    $buildId = Join-Path $clientDir ".next" "BUILD_ID"
+    if (Test-Path $buildId) { Remove-Item $buildId -Force; Write-OK "Cleared stale build — server will start Next.js in dev mode" }
+
+    Write-Host "  Starting in DEV mode  (hot reload)" -ForegroundColor Cyan
+    Write-Host "  Open: http://127.0.0.1:$uiPort" -ForegroundColor White
+    Write-Host "  Press Ctrl+C to stop." -ForegroundColor DarkGray
     Write-Host ""
-    Write-Host "  Open two terminals and run:" -ForegroundColor Yellow
-    Write-Host "    Terminal 1:  cd server  ;  npm run dev" -ForegroundColor White
-    Write-Host "    Terminal 2:  cd client  ;  npm run dev" -ForegroundColor White
-    Write-Host ""
+    Push-Location $serverDir
+    node index.js
 } else {
     Write-Host "  Starting DeepClaw UI..." -ForegroundColor Cyan
     Write-Host "  http://127.0.0.1:$uiPort" -ForegroundColor White

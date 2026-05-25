@@ -1,17 +1,17 @@
 import type { NextConfig } from 'next';
 import path from 'path';
 
-const SERVER_URL = process.env.SERVER_URL || 'http://127.0.0.1:19000';
+const PROXY_PORT = parseInt(process.env.DEEPCLAW_UI_PORT || '19000', 10);
 
 const nextConfig: NextConfig = {
-  // In dev: proxy /api/* to the proxy server on 19000
+  allowedDevOrigins: ['127.0.0.1', 'localhost'],
+  // Dev-mode proxy: when opening localhost:3000 directly, forward API/WS to the proxy server
   async rewrites() {
     return [
-      { source: '/api/:path*', destination: `${SERVER_URL}/api/:path*` },
+      { source: '/api/:path*', destination: `http://127.0.0.1:${PROXY_PORT}/api/:path*` },
     ];
   },
   turbopack: {
-    // Anchor Turbopack to this project's directory, not the workspace root
     root: path.resolve(__dirname),
   },
 };
