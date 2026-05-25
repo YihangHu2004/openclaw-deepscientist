@@ -3,7 +3,13 @@
 import { useEffect, useState, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { fetchFiles, fetchFileText, fileUrl, FileItem } from '@/lib/api';
+import { fetchFiles, fileUrl, FileItem } from '@/lib/api';
+
+async function fetchFileText(filePath: string): Promise<string> {
+  const res = await fetch(fileUrl(filePath));
+  if (!res.ok) throw new Error(`file: ${res.status}`);
+  return res.text();
+}
 
 // ─── File type icon ───────────────────────────────────────────────────────────
 function FileTypeIcon({ name }: { name: string }) {

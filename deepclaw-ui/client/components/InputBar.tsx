@@ -81,15 +81,15 @@ export default function InputBar({ status, disabled, onSend }: Props) {
   return (
     <div
       className="px-4 py-3 border-t"
-      style={{ background: 'white', borderColor: 'var(--dc-border)' }}
+      style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' }}
     >
       <StatusDot status={status} />
       <div
         className="flex items-end gap-2 mt-2 rounded-xl border px-3 py-2 transition-colors"
         style={{
-          borderColor: text.length > 0 ? 'var(--dc-teal)' : 'var(--dc-border)',
-          background: '#f8fafc',
-          boxShadow: text.length > 0 ? '0 0 0 2px rgba(10,126,164,0.1)' : 'none',
+          borderColor: text.length > 0 ? 'var(--accent)' : 'var(--border)',
+          background: 'var(--bg-base)',
+          boxShadow: text.length > 0 ? '0 0 0 2px rgba(0,200,232,0.08)' : 'none',
         }}
       >
         <textarea
@@ -115,7 +115,7 @@ export default function InputBar({ status, disabled, onSend }: Props) {
             fontSize: 14,
             lineHeight: 1.6,
             fontFamily: 'var(--font-ui)',
-            color: '#0f172a',
+            color: 'var(--text-primary)',
             maxHeight: 160,
             overflowY: 'auto',
           }}
@@ -130,7 +130,7 @@ export default function InputBar({ status, disabled, onSend }: Props) {
           <SendIcon active={canSend} />
         </button>
       </div>
-      <div className="text-right mt-1" style={{ fontSize: 11, color: '#cbd5e1' }}>
+      <div className="text-right mt-1" style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: '0.04em' }}>
         Shift+Enter 换行
       </div>
     </div>

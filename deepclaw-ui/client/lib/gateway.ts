@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 
-const SERVER_BASE = process.env.NEXT_PUBLIC_SERVER_URL || 'http://127.0.0.1:18791';
+const SERVER_BASE = process.env.NEXT_PUBLIC_SERVER_URL || 'http://127.0.0.1:19000';
 const WS_URL      = SERVER_BASE.replace(/^http/, 'ws') + '/ws/gateway';
 
 // ─── Types ────────────────────────────────────────────────────────────────────

@@ -10,24 +10,38 @@ import ToolCallCard from './ToolCallCard';
 function ThinkingBlock({ text }: { text: string }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="my-1">
+    <div style={{ margin: '6px 0' }}>
       <button
         onClick={() => setOpen(o => !o)}
-        className="flex items-center gap-1.5 text-xs"
-        style={{ color: '#64748b', background: 'none', border: 'none', cursor: 'pointer', fontStyle: 'italic' }}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+          fontFamily: 'var(--font-mono)', fontSize: 10,
+          color: 'var(--text-muted)', letterSpacing: '0.06em',
+        }}
       >
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-          <circle cx="6" cy="6" r="5" stroke="#64748b" strokeWidth="1"/>
-          <path d="M4.5 5C4.5 4.17 5.17 3.5 6 3.5C6.83 3.5 7.5 4.17 7.5 5C7.5 5.6 7.14 6.1 6.6 6.35L6 6.6V7.5" stroke="#64748b" strokeWidth="1" strokeLinecap="round"/>
-          <circle cx="6" cy="8.5" r="0.5" fill="#64748b"/>
+        {/* Small circuit-node icon */}
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+          <circle cx="5" cy="5" r="3" stroke="var(--text-muted)" strokeWidth="1"/>
+          <circle cx="5" cy="5" r="1" fill="var(--text-muted)" opacity="0.6"/>
         </svg>
-        思考过程 {open ? '▲' : '▼'}
+        THINKING {open ? '▲' : '▼'}
       </button>
       {open && (
-        <div
-          className="mt-1 pl-3 text-xs italic"
-          style={{ color: '#64748b', borderLeft: '2px solid #cbd5e1', lineHeight: 1.6 }}
-        >
+        <div style={{
+          marginTop: 6,
+          padding: '8px 12px',
+          background: '#030b16',
+          border: '1px solid var(--border-subtle)',
+          borderRadius: 4,
+          fontFamily: 'var(--font-mono)',
+          fontSize: 11,
+          color: 'var(--text-secondary)',
+          lineHeight: 1.65,
+          fontStyle: 'italic',
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'break-word',
+        }}>
           {text}
         </div>
       )}
@@ -61,6 +75,28 @@ function fmtTime(ms: number) {
   return new Date(ms).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
 }
 
+// ─── Small AI indicator (replaces circular avatar) ────────────────────────────
+function AiMark() {
+  return (
+    <div style={{
+      flexShrink: 0,
+      width: 22, height: 22,
+      border: '1px solid rgba(0,200,232,0.3)',
+      borderRadius: 3,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      marginTop: 2,
+      background: 'rgba(0,200,232,0.06)',
+    }}>
+      {/* Simplified claw mark: 3 converging lines */}
+      <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+        <line x1="2"  y1="2"  x2="5.5" y2="9" stroke="#00c8e8" strokeWidth="1.3" strokeLinecap="round"/>
+        <line x1="5.5" y1="2" x2="5.5" y2="9" stroke="#00c8e8" strokeWidth="1.3" strokeLinecap="round"/>
+        <line x1="9"  y1="2"  x2="5.5" y2="9" stroke="#00c8e8" strokeWidth="1.3" strokeLinecap="round"/>
+      </svg>
+    </div>
+  );
+}
+
 // ─── MessageBubble ────────────────────────────────────────────────────────────
 
 interface Props {
@@ -74,15 +110,26 @@ export default function MessageBubble({ message, streaming }: Props) {
   if (isUser) {
     const text = message.content.filter(b => b.type === 'text').map(b => b.text).join('');
     return (
-      <div className="flex justify-end mb-4 msg-enter">
+      <div className="flex justify-end mb-3 msg-enter">
         <div style={{ maxWidth: '72%' }}>
-          <div
-            className="px-4 py-3 rounded-2xl rounded-tr-sm text-sm leading-relaxed text-white"
-            style={{ background: 'linear-gradient(135deg, var(--dc-teal) 0%, var(--dc-teal-dark) 100%)' }}
-          >
+          <div style={{
+            padding: '9px 14px',
+            borderRadius: 4,
+            background: 'rgba(0,200,232,0.1)',
+            border: '1px solid rgba(0,200,232,0.22)',
+            fontSize: 13,
+            lineHeight: 1.65,
+            color: 'var(--text-primary)',
+            fontFamily: 'var(--font-ui)',
+            wordBreak: 'break-word',
+          }}>
             {text}
           </div>
-          <div className="text-right mt-1" style={{ fontSize: 11, color: '#94a3b8' }}>
+          <div style={{
+            textAlign: 'right', marginTop: 4,
+            fontFamily: 'var(--font-mono)', fontSize: 9,
+            color: 'var(--text-muted)', letterSpacing: '0.05em',
+          }}>
             {fmtTime(message.timestamp)}
           </div>
         </div>
@@ -90,37 +137,30 @@ export default function MessageBubble({ message, streaming }: Props) {
     );
   }
 
-  // Assistant message
+  // ── Assistant message ──────────────────────────────────────────────────────
   return (
-    <div className="flex gap-3 mb-4 msg-enter">
-      {/* AI avatar */}
-      <div
-        className="shrink-0 rounded-full flex items-center justify-center"
-        style={{ width: 32, height: 32, background: '#0f172a', border: '1.5px solid var(--dc-teal)', marginTop: 2 }}
-      >
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-          <circle cx="8" cy="8" r="3" fill="var(--dc-teal)" />
-          <circle cx="8" cy="8" r="6" stroke="var(--dc-teal)" strokeWidth="1" fill="none" opacity="0.4"/>
-        </svg>
-      </div>
+    <div className="flex gap-2.5 mb-4 msg-enter" style={{ alignItems: 'flex-start' }}>
+      <AiMark />
 
-      <div style={{ maxWidth: '82%', flex: 1 }}>
-        <div
-          className="px-4 py-3 rounded-2xl rounded-tl-sm"
-          style={{
-            background: 'white',
-            borderLeft: '2px solid var(--dc-teal)',
-            boxShadow: '0 1px 6px rgba(0,0,0,0.06)',
-          }}
-        >
+      <div style={{ flex: 1, minWidth: 0, maxWidth: 'calc(100% - 34px)' }}>
+        <div style={{
+          padding: '10px 14px',
+          borderRadius: 4,
+          background: 'var(--bg-elevated)',
+          border: '1px solid var(--border-subtle)',
+        }}>
           {message.content.map((block, i) => (
             <BlockRenderer key={i} block={block} />
           ))}
           {streaming && (
-            <span className="typing-cursor" style={{ fontSize: 13, color: '#94a3b8' }} />
+            <span className="typing-cursor" style={{ fontSize: 13 }} />
           )}
         </div>
-        <div className="mt-1" style={{ fontSize: 11, color: '#94a3b8' }}>
+        <div style={{
+          marginTop: 4,
+          fontFamily: 'var(--font-mono)', fontSize: 9,
+          color: 'var(--text-muted)', letterSpacing: '0.05em',
+        }}>
           {fmtTime(message.timestamp)}
         </div>
       </div>

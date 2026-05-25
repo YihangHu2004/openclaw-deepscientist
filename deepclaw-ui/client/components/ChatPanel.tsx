@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useGateway, ChatMessage } from '@/lib/gateway';
-import { fetchSessionHistory, HistoryMessage } from '@/lib/api';
+import { fetchSessionHistory, fetchProjectFiles, createSession, bindProjectSession, HistoryMessage } from '@/lib/api';
 import MessageBubble from './MessageBubble';
 import InputBar from './InputBar';
 
@@ -30,32 +30,55 @@ function historyToChat(hm: HistoryMessage): ChatMessage {
   };
 }
 
-// ─── Empty state ──────────────────────────────────────────────────────────────
-function EmptyState() {
+// ─── No-session state ─────────────────────────────────────────────────────────
+function NoSessionState({ onCreateSession, creating }: { onCreateSession?: () => void; creating: boolean }) {
   return (
-    <div className="flex flex-col items-center justify-center h-full gap-3" style={{ color: '#94a3b8' }}>
-      <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
-        <circle cx="24" cy="24" r="10" fill="none" stroke="#cbd5e1" strokeWidth="2"/>
-        <circle cx="24" cy="24" r="18" fill="none" stroke="#e2e8f0" strokeWidth="1.5"/>
-        <circle cx="24" cy="24" r="26" fill="none" stroke="#f1f5f9" strokeWidth="1"/>
-        <circle cx="24" cy="24" r="4" fill="#cbd5e1"/>
+    <div className="flex flex-col items-center justify-center h-full gap-4" style={{ color: '#94a3b8' }}>
+      <svg width="44" height="44" viewBox="0 0 44 44" fill="none">
+        <circle cx="22" cy="22" r="9"  fill="none" stroke="var(--border)"        strokeWidth="1.5"/>
+        <circle cx="22" cy="22" r="16" fill="none" stroke="var(--border-subtle)" strokeWidth="1"/>
+        <circle cx="22" cy="22" r="3.5" fill="var(--border)"/>
       </svg>
-      <div style={{ fontSize: 14, textAlign: 'center' }}>
-        <div style={{ fontWeight: 500 }}>选择左侧会话开始对话</div>
-        <div style={{ fontSize: 12, marginTop: 4, color: '#cbd5e1' }}>或等待 AI agent 发来消息</div>
-      </div>
+      {onCreateSession ? (
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 12 }}>
+            此项目尚未绑定 Session
+          </div>
+          <button
+            onClick={onCreateSession}
+            disabled={creating}
+            className="dc-btn dc-btn-primary"
+            style={{ fontSize: 12, padding: '6px 14px' }}
+          >
+            {creating ? '创建中…' : '新建 Session 开始对话'}
+          </button>
+        </div>
+      ) : (
+        <div style={{ fontSize: 13, color: 'var(--text-secondary)', textAlign: 'center' }}>
+          选择左侧会话开始对话
+        </div>
+      )}
     </div>
   );
 }
 
 // ─── ChatPanel ────────────────────────────────────────────────────────────────
 
-interface Props { sessionId: string | null; sessionKey: string | null; }
+interface Props {
+  sessionId:        string | null;
+  sessionKey:       string | null;
+  slug?:            string;
+  initialMessage?:  string;
+  onSessionCreated?: (sessionId: string, sessionKey: string) => void;
+}
 
-export default function ChatPanel({ sessionId, sessionKey }: Props) {
-  const [messages, setMessages]     = useState<ChatMessage[]>([]);
+export default function ChatPanel({ sessionId, sessionKey, slug, initialMessage, onSessionCreated }: Props) {
+  const [messages, setMessages]       = useState<ChatMessage[]>([]);
   const [histLoading, setHistLoading] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const [initSending, setInitSending] = useState(false);
+  const [creating, setCreating]       = useState(false);
+  const initialSentRef                = useRef(false);
+  const bottomRef                     = useRef<HTMLDivElement>(null);
 
   const handleNewMessage = useCallback((msg: ChatMessage) => {
     setMessages(prev => {
@@ -69,6 +92,18 @@ export default function ChatPanel({ sessionId, sessionKey }: Props) {
     sessionKey,
     onMessage: handleNewMessage,
   });
+
+  // Auto-send initialMessage once connected (for new sessions from landing page)
+  useEffect(() => {
+    if (!initialMessage || initialSentRef.current || status !== 'connected') return;
+    initialSentRef.current = true;
+    const userMsg: ChatMessage = {
+      id: `local-${Date.now()}`, role: 'user',
+      content: [{ type: 'text', text: initialMessage }], timestamp: Date.now(),
+    };
+    setMessages(prev => [...prev, userMsg]);
+    sendMessage(initialMessage);
+  }, [status, initialMessage, sendMessage]);
 
   // Load history when session changes
   useEffect(() => {
@@ -86,6 +121,45 @@ export default function ChatPanel({ sessionId, sessionKey }: Props) {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, streamingText]);
 
+  const handleInitWorkspace = useCallback(async () => {
+    if (!slug || !sessionId || status !== 'connected') return;
+    setInitSending(true);
+    try {
+      const files = await fetchProjectFiles(slug, '');
+      const fileList = files
+        .sort((a, b) => (a.isDirectory === b.isDirectory ? a.name.localeCompare(b.name) : a.isDirectory ? -1 : 1))
+        .map(f => `  ${f.isDirectory ? '📁' : '📄'} ${f.name}`)
+        .join('\n');
+      const text = `请读取并了解 **${slug}** 项目工作区，汇报当前研究进展。\n\n工作区文件：\n${fileList || '（空目录）'}\n\n请逐一读取关键文件（project.md、plan.md、brief.md、README.md 等 .md 类型文件），然后告诉我：研究背景、当前阶段和最新状态。`;
+      const userMsg: ChatMessage = {
+        id:        `local-${Date.now()}`,
+        role:      'user',
+        content:   [{ type: 'text', text }],
+        timestamp: Date.now(),
+      };
+      setMessages(prev => [...prev, userMsg]);
+      sendMessage(text);
+    } catch (e) {
+      console.error('Init workspace failed', e);
+    } finally {
+      setInitSending(false);
+    }
+  }, [slug, sessionId, status, sendMessage]);
+
+  const handleCreateSession = useCallback(async () => {
+    if (!slug || !onSessionCreated || creating) return;
+    setCreating(true);
+    try {
+      const { sessionId: newId, sessionKey: newKey } = await createSession();
+      await bindProjectSession(slug, newKey);
+      onSessionCreated(newId, newKey);
+    } catch (e) {
+      console.error('Create session failed:', e);
+    } finally {
+      setCreating(false);
+    }
+  }, [slug, onSessionCreated, creating]);
+
   const handleSend = (text: string) => {
     // Optimistically add user message
     const userMsg: ChatMessage = {
@@ -99,19 +173,35 @@ export default function ChatPanel({ sessionId, sessionKey }: Props) {
   };
 
   return (
-    <div className="flex flex-col h-full" style={{ background: 'var(--dc-chat)' }}>
+    <div className="flex flex-col h-full" style={{ background: 'var(--bg-base)' }}>
       {/* Message area */}
-      <div className="flex-1 overflow-y-auto dc-scroll px-6 py-4">
+      <div className="flex-1 overflow-y-auto dc-scroll px-5 py-4">
         {!sessionId ? (
-          <EmptyState />
+          <NoSessionState
+            onCreateSession={slug ? handleCreateSession : undefined}
+            creating={creating}
+          />
         ) : histLoading ? (
           <div className="flex items-center justify-center h-full gap-2" style={{ color: '#94a3b8', fontSize: 14 }}>
             <span className="pulse-dot inline-block w-2 h-2 rounded-full" style={{ background: 'var(--dc-teal)' }} />
             加载历史消息…
           </div>
         ) : messages.length === 0 ? (
-          <div className="flex items-center justify-center h-full" style={{ color: '#94a3b8', fontSize: 14 }}>
-            暂无消息记录
+          <div className="flex flex-col items-center justify-center h-full gap-4">
+            <div style={{ fontSize: 14, color: 'var(--text-secondary)' }}>暂无消息记录</div>
+            {slug && (
+              <button
+                onClick={handleInitWorkspace}
+                disabled={initSending || status !== 'connected'}
+                className="dc-btn dc-btn-primary"
+                style={{ fontSize: 12, gap: 6 }}
+              >
+                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden>
+                  <path d="M2 2h4l1.5 2H11v7H2V2z" stroke="currentColor" strokeWidth="1.1" strokeLinejoin="round" fill="none"/>
+                </svg>
+                {initSending ? '读取中…' : '读取工作区，了解研究进展'}
+              </button>
+            )}
           </div>
         ) : (
           <>
@@ -120,13 +210,18 @@ export default function ChatPanel({ sessionId, sessionKey }: Props) {
             ))}
             {/* Streaming placeholder */}
             {streamingText && (
-              <div className="flex gap-3 mb-4 msg-enter">
-                <div className="shrink-0 rounded-full flex items-center justify-center"
-                  style={{ width: 32, height: 32, background: '#0f172a', border: '1.5px solid var(--dc-teal)', marginTop: 2 }}>
-                  <span className="pulse-dot inline-block w-2 h-2 rounded-full" style={{ background: 'var(--dc-teal)' }} />
+              <div className="flex gap-2.5 mb-4 msg-enter" style={{ alignItems: 'flex-start' }}>
+                {/* AiMark — matches MessageBubble */}
+                <div style={{
+                  flexShrink: 0, width: 22, height: 22, marginTop: 2,
+                  border: '1px solid rgba(0,200,232,0.3)', borderRadius: 3,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: 'rgba(0,200,232,0.06)',
+                }}>
+                  <span className="pulse-dot inline-block" style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--accent)' }} />
                 </div>
-                <div className="px-4 py-3 rounded-2xl rounded-tl-sm dc-prose"
-                  style={{ background: 'white', borderLeft: '2px solid var(--dc-teal)', boxShadow: '0 1px 6px rgba(0,0,0,0.06)', maxWidth: '82%' }}>
+                <div className="dc-prose"
+                  style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 4, padding: '10px 14px', flex: 1, minWidth: 0 }}>
                   {streamingText}
                   <span className="typing-cursor" />
                 </div>

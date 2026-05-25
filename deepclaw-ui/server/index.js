@@ -93,7 +93,90 @@ if (device) {
 
 const SESSIONS_DIR   = path.join(OPENCLAW_HOME, 'agents', 'main', 'sessions');
 const SESSIONS_META  = path.join(SESSIONS_DIR, 'sessions.json');
-const WORKSPACE_ROOT = path.join(OPENCLAW_HOME, 'workspace-scientist', 'state', 'projects');
+
+// Resolve workspace projects directory.
+// Priority: env var → openclaw.json agents.list → directory scan → hardcoded fallback
+function resolveWorkspaceRoot() {
+  // 1. Explicit env override
+  if (process.env.OPENCLAW_WORKSPACE) {
+    return path.isAbsolute(process.env.OPENCLAW_WORKSPACE)
+      ? process.env.OPENCLAW_WORKSPACE
+      : path.join(OPENCLAW_HOME, process.env.OPENCLAW_WORKSPACE, 'state', 'projects');
+  }
+  // 2. Read from openclaw.json → agents.list (most reliable)
+  try {
+    let raw = fs.readFileSync(path.join(OPENCLAW_HOME, 'openclaw.json'), 'utf-8');
+    if (raw.charCodeAt(0) === 0xFEFF) raw = raw.slice(1);
+    const cfg     = JSON.parse(raw);
+    const agents  = cfg?.agents?.list || [];
+    // Prefer scientist agent; fall back to first agent that has a workspace field
+    const agent   = agents.find(a => a.id === 'scientist') || agents.find(a => a.workspace);
+    if (agent?.workspace) return path.join(agent.workspace, 'state', 'projects');
+  } catch {}
+  // 3. Scan ~/.openclaw/ for workspace-*/state/projects/
+  try {
+    for (const entry of fs.readdirSync(OPENCLAW_HOME)) {
+      if (!entry.startsWith('workspace')) continue;
+      const candidate = path.join(OPENCLAW_HOME, entry, 'state', 'projects');
+      if (fs.existsSync(candidate)) return candidate;
+    }
+  } catch {}
+  // 4. Hardcoded fallback
+  return path.join(OPENCLAW_HOME, 'workspace-scientist', 'state', 'projects');
+}
+
+const WORKSPACE_ROOT = resolveWorkspaceRoot();
+
+// ─── Gateway session creation (for POST /api/sessions/create) ─────────────────
+
+function createSessionViaGateway() {
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(GATEWAY_WS_URL);
+    let connectSent = false, done = false;
+
+    const fail = (err) => { if (!done) { done = true; clearTimeout(timer); ws.close(); reject(err); } };
+    const timer = setTimeout(() => fail(new Error('Timeout creating session')), 10000);
+
+    function doConnect(nonce) {
+      if (connectSent) return;
+      connectSent = true;
+      const scopes = device ? DEVICE_SCOPES : ['operator.read', 'operator.write'];
+      const auth   = { token: GATEWAY_TOKEN };
+      if (device?.operatorToken) auth.deviceToken = device.operatorToken;
+      let deviceParam;
+      if (device?.privateKeyPem) {
+        const signedAtMs = Date.now();
+        const signStr    = buildSignString({ deviceId: device.deviceId, clientId: 'cli', clientMode: 'cli', role: 'operator', scopes, signedAtMs, token: GATEWAY_TOKEN, nonce });
+        deviceParam = { id: device.deviceId, publicKey: device.publicKey, signature: signEd25519(device.privateKeyPem, signStr), signedAt: signedAtMs, nonce };
+      }
+      ws.send(JSON.stringify({ type: 'req', id: 'c', method: 'connect', params: {
+        minProtocol: 4, maxProtocol: 4, client: { id: 'cli', version: '1.0.0', platform: 'win32', mode: 'cli' },
+        role: 'operator', scopes, caps: ['tool-events'], auth,
+        ...(deviceParam ? { device: deviceParam } : {}),
+      }}));
+    }
+
+    ws.on('open', () => { setTimeout(() => { if (!connectSent) doConnect(''); }, 500); });
+    ws.on('message', (data) => {
+      if (done) return;
+      try {
+        const msg = JSON.parse(data.toString());
+        if (msg.type === 'event' && msg.event === 'connect.challenge' && !connectSent) { doConnect(msg.payload?.nonce || ''); return; }
+        if (msg.type === 'res' && msg.id === 'c' && msg.ok) {
+          ws.send(JSON.stringify({ type: 'req', id: 's', method: 'sessions.create', params: { agentId: 'scientist' } }));
+          return;
+        }
+        if (msg.type === 'res' && msg.id === 's') {
+          done = true; clearTimeout(timer); ws.close();
+          msg.ok ? resolve(msg.payload) : reject(new Error(msg.error?.message || 'Session creation failed'));
+        }
+      } catch {}
+    });
+    ws.on('error', fail);
+    ws.on('close', () => { if (!done) fail(new Error('Connection closed')); });
+  });
+}
+
 
 // ─── Express ──────────────────────────────────────────────────────────────────
 
@@ -105,10 +188,31 @@ app.use(express.json());
 
 app.get('/api/sessions', (req, res) => {
   try {
-    if (!fs.existsSync(SESSIONS_META)) return res.json([]);
-    const meta = JSON.parse(fs.readFileSync(SESSIONS_META, 'utf-8'));
+    // Merge sessions.json from all agent directories
+    const agentsDir = path.join(OPENCLAW_HOME, 'agents');
+    let meta = {};
+    try {
+      for (const ag of fs.readdirSync(agentsDir)) {
+        const f = path.join(agentsDir, ag, 'sessions', 'sessions.json');
+        if (fs.existsSync(f)) Object.assign(meta, JSON.parse(fs.readFileSync(f, 'utf-8')));
+      }
+    } catch {}
+    // Fallback to legacy single path
+    if (Object.keys(meta).length === 0 && fs.existsSync(SESSIONS_META))
+      meta = JSON.parse(fs.readFileSync(SESSIONS_META, 'utf-8'));
+
+    const agent = req.query.agent; // ?agent=scientist
     const list = Object.entries(meta)
-      .filter(([, s]) => s)
+      .filter(([key, s]) => {
+        if (!s) return false;
+        if (agent) {
+          const a = agent.toLowerCase();
+          return key.toLowerCase().includes(a)
+            || String(s.agentId || '').toLowerCase() === a
+            || String(s.origin?.agentId || '').toLowerCase() === a;
+        }
+        return true;
+      })
       .map(([key, s]) => ({
         id:        s.sessionId || key,
         key,
@@ -128,8 +232,22 @@ app.get('/api/sessions', (req, res) => {
 
 app.get('/api/sessions/:id', (req, res) => {
   try {
-    const file = path.join(SESSIONS_DIR, `${req.params.id}.jsonl`);
-    if (!fs.existsSync(file)) return res.status(404).json({ error: 'Session not found' });
+    // Search across all agent session directories
+    const agentsDir = path.join(OPENCLAW_HOME, 'agents');
+    let file = null;
+    try {
+      for (const agent of fs.readdirSync(agentsDir)) {
+        const candidate = path.join(agentsDir, agent, 'sessions', `${req.params.id}.jsonl`);
+        if (fs.existsSync(candidate)) { file = candidate; break; }
+      }
+    } catch {}
+    // Fallback to legacy path
+    if (!file) {
+      const legacy = path.join(SESSIONS_DIR, `${req.params.id}.jsonl`);
+      if (fs.existsSync(legacy)) file = legacy;
+    }
+    // New session: file doesn't exist yet (no messages exchanged) — return empty history
+    if (!file) return res.json({ sessionId: req.params.id, messages: [] });
 
     const messages = [];
     for (const line of fs.readFileSync(file, 'utf-8').split('\n').filter(Boolean)) {
@@ -151,6 +269,38 @@ app.get('/api/sessions/:id', (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// ─── REST: create new session ─────────────────────────────────────────────────
+
+app.post('/api/sessions/create', async (req, res) => {
+  try {
+    const session = await createSessionViaGateway();
+    res.json(session);
+  } catch (err) {
+    console.error('[sessions.create]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── REST: find project linked to a session ───────────────────────────────────
+
+app.get('/api/sessions/:sessionId/linked-project', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    if (!fs.existsSync(WORKSPACE_ROOT)) return res.json(null);
+    const entries = await fs.promises.readdir(WORKSPACE_ROOT, { withFileTypes: true });
+    for (const e of entries) {
+      if (!e.isDirectory() || e.name.startsWith('.')) continue;
+      try {
+        const raw = (await fs.promises.readFile(path.join(WORKSPACE_ROOT, e.name, '.session'), 'utf-8')).trim();
+        if (raw === sessionId || raw.includes(sessionId)) {
+          return res.json({ slug: e.name });
+        }
+      } catch {}
+    }
+    res.json(null);
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // ─── REST: file browser ───────────────────────────────────────────────────────
@@ -204,6 +354,118 @@ app.get('/api/workspace/file', async (req, res) => {
   } catch (err) {
     res.status(500).send(err.message);
   }
+});
+
+// ─── Helper: read project metadata ───────────────────────────────────────────
+
+async function readProjectMeta(slug) {
+  const projDir = path.join(WORKSPACE_ROOT, slug);
+  const proj = { slug, title: slug.replace(/-/g, ' '), status: 'unknown',
+                 createdAt: null, topic: '', tags: [], sessionKey: null, updatedAt: 0 };
+  try {
+    const md = await fs.promises.readFile(path.join(projDir, 'project.md'), 'utf-8');
+    const m1 = md.match(/\*\*状态\*\*[:：]\s*(\S+)/);        if (m1) proj.status = m1[1];
+    const m2 = md.match(/\*\*创建\*\*[:：]\s*(\S+)/);        if (m2) proj.createdAt = m2[1];
+    const m3 = md.match(/##\s*研究主题\s*\n+\*\*(.+?)\*\*/); if (m3) proj.topic = m3[1];
+    else {
+      const m4 = md.match(/##\s*研究主题\s*\n+(.+)/);
+      if (m4) proj.topic = m4[1].replace(/\*+/g, '').trim().slice(0, 100);
+    }
+    const m5 = md.match(/领域标签\*\*[:：]\s*\[(.+?)\]/);
+    if (m5) proj.tags = m5[1].split(',').map(t => t.trim()).filter(Boolean);
+  } catch {}
+  try {
+    const raw = await fs.promises.readFile(path.join(projDir, '.session'), 'utf-8');
+    proj.sessionKey = raw.trim() || null;
+  } catch {}
+  try { proj.updatedAt = (await fs.promises.stat(projDir)).mtimeMs; } catch {}
+  return proj;
+}
+
+// ─── REST: projects ───────────────────────────────────────────────────────────
+
+app.get('/api/projects', async (req, res) => {
+  try {
+    if (!fs.existsSync(WORKSPACE_ROOT)) return res.json([]);
+    const entries = await fs.promises.readdir(WORKSPACE_ROOT, { withFileTypes: true });
+    const slugs = entries.filter(e => e.isDirectory() && !e.name.startsWith('.')).map(e => e.name);
+    const projects = await Promise.all(slugs.map(readProjectMeta));
+    projects.sort((a, b) => b.updatedAt - a.updatedAt);
+    res.json(projects);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/projects/:slug', async (req, res) => {
+  try {
+    const dir = path.resolve(WORKSPACE_ROOT, req.params.slug);
+    if (!dir.startsWith(WORKSPACE_ROOT)) return res.status(403).send('Forbidden');
+    if (!fs.existsSync(dir)) return res.status(404).json({ error: 'Not found' });
+    res.json(await readProjectMeta(req.params.slug));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/projects', async (req, res) => {
+  try {
+    const { slug } = req.body;
+    if (!slug || !/^[a-z0-9][a-z0-9-]*$/.test(slug))
+      return res.status(400).json({ error: 'Invalid slug (lowercase, numbers, hyphens)' });
+    const dir = path.join(WORKSPACE_ROOT, slug);
+    if (fs.existsSync(dir)) return res.status(409).json({ error: 'Project already exists' });
+    await fs.promises.mkdir(dir, { recursive: true });
+    res.json({ ok: true, slug });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/projects/:slug/session', async (req, res) => {
+  try {
+    const dir = path.resolve(WORKSPACE_ROOT, req.params.slug);
+    if (!dir.startsWith(WORKSPACE_ROOT)) return res.status(403).send('Forbidden');
+    if (!fs.existsSync(dir)) return res.status(404).json({ error: 'Not found' });
+    const { sessionKey } = req.body;
+    if (!sessionKey) return res.status(400).json({ error: 'sessionKey required' });
+    await fs.promises.writeFile(path.join(dir, '.session'), sessionKey, 'utf-8');
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── REST: project-scoped files ───────────────────────────────────────────────
+
+app.get('/api/projects/:slug/files', async (req, res) => {
+  try {
+    const projRoot = path.resolve(WORKSPACE_ROOT, req.params.slug);
+    if (!projRoot.startsWith(WORKSPACE_ROOT)) return res.status(403).send('Forbidden');
+    const dirPath = path.resolve(projRoot, req.query.path || '');
+    if (!dirPath.startsWith(projRoot)) return res.status(403).send('Forbidden');
+    const items = await fs.promises.readdir(dirPath, { withFileTypes: true });
+    res.json(items.filter(i => !i.name.startsWith('.')).map(i => ({ name: i.name, isDirectory: i.isDirectory() })));
+  } catch (err) { res.status(err.code === 'ENOENT' ? 404 : 500).send(err.message); }
+});
+
+app.get('/api/projects/:slug/file', async (req, res) => {
+  try {
+    const projRoot = path.resolve(WORKSPACE_ROOT, req.params.slug);
+    if (!projRoot.startsWith(WORKSPACE_ROOT)) return res.status(403).send('Forbidden');
+    if (!req.query.path) return res.status(400).send('Missing path');
+    const filePath = path.resolve(projRoot, req.query.path);
+    if (!filePath.startsWith(projRoot)) return res.status(403).send('Forbidden');
+    let stat;
+    try { stat = await fs.promises.stat(filePath); } catch { return res.status(404).send('Not found'); }
+    if (!stat.isFile()) return res.status(400).send('Not a file');
+    const ext = path.extname(filePath).toLowerCase();
+    if (['.html', '.md', '.txt', '.json', '.csv'].includes(ext)) {
+      res.type(ext === '.html' ? 'text/html' : 'text/plain')
+         .send(await fs.promises.readFile(filePath, 'utf-8'));
+      return;
+    }
+    const mime = { '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      '.pdf': 'application/pdf', '.png': 'image/png', '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg', '.zip': 'application/zip' }[ext] || 'application/octet-stream';
+    const fn = path.basename(filePath);
+    res.writeHead(200, { 'Content-Type': mime,
+      'Content-Disposition': `attachment; filename="${fn.replace(/[^\x20-\x7E]/g,'_')}"; filename*=UTF-8''${encodeURIComponent(fn)}`,
+      'Content-Length': stat.size });
+    fs.createReadStream(filePath).pipe(res);
+  } catch (err) { res.status(500).send(err.message); }
 });
 
 // ─── Static: serve Next.js build ─────────────────────────────────────────────
