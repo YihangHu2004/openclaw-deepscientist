@@ -3,40 +3,47 @@
 import { useState, useRef, KeyboardEvent } from 'react';
 import { GatewayStatus } from '@/lib/gateway';
 
-// ─── Status indicator ─────────────────────────────────────────────────────────
-function StatusDot({ status }: { status: GatewayStatus }) {
+// ─── Status indicator (brutalist square) ─────────────────────────────────────
+function StatusIndicator({ status }: { status: GatewayStatus }) {
   const colors: Record<GatewayStatus, string> = {
-    connected:    '#22d3ee',
-    connecting:   '#fcd34d',
-    disconnected: '#475569',
-    error:        '#f87171',
+    connected:    'var(--cm-emerald)',
+    connecting:   'var(--cm-amber)',
+    disconnected: 'var(--text-muted)',
+    error:        'var(--cm-rose)',
   };
   const labels: Record<GatewayStatus, string> = {
-    connected:    '已连接',
-    connecting:   '连接中…',
-    disconnected: '未连接',
-    error:        '连接失败',
+    connected:    'CONNECTED',
+    connecting:   'CONNECTING…',
+    disconnected: 'DISCONNECTED',
+    error:        'ERROR',
   };
   return (
-    <div className="flex items-center gap-1.5">
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
       <span
         className={status === 'connected' ? 'pulse-dot' : ''}
-        style={{ width: 7, height: 7, borderRadius: '50%', background: colors[status], display: 'inline-block' }}
+        style={{
+          width: 7, height: 7, borderRadius: 0,
+          background: colors[status], display: 'inline-block',
+          flexShrink: 0,
+        }}
       />
-      <span style={{ fontSize: 11, color: '#64748b' }}>{labels[status]}</span>
+      <span style={{
+        fontSize: 9, fontFamily: 'var(--font-mono)',
+        letterSpacing: '0.1em', textTransform: 'uppercase',
+        color: colors[status],
+      }}>{labels[status]}</span>
     </div>
   );
 }
 
-// ─── Send icon ────────────────────────────────────────────────────────────────
-function SendIcon({ active }: { active: boolean }) {
+// ─── Send button arrow ────────────────────────────────────────────────────────
+function SendArrow({ active }: { active: boolean }) {
   return (
-    <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-      <path d="M2 9 L16 2 L10 9 L16 16 Z"
-        fill={active ? 'var(--dc-teal)' : '#94a3b8'}
-        style={{ transition: 'fill 0.15s' }}
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <path d="M2 8 L14 2 L9 8 L14 14 Z"
+        fill={active ? 'var(--cm-emerald)' : 'var(--text-muted)'}
+        style={{ transition: 'fill 200ms' }}
       />
-      <line x1="10" y1="9" x2="16" y2="9" stroke={active ? 'var(--dc-teal)' : '#94a3b8'} strokeWidth="1.5" strokeLinecap="round" style={{ transition: 'stroke 0.15s' }}/>
     </svg>
   );
 }
@@ -44,14 +51,15 @@ function SendIcon({ active }: { active: boolean }) {
 // ─── InputBar ─────────────────────────────────────────────────────────────────
 
 interface Props {
-  status:      GatewayStatus;
-  disabled?:   boolean;
-  onSend:      (text: string) => void;
+  status:    GatewayStatus;
+  disabled?: boolean;
+  onSend:    (text: string) => void;
 }
 
 export default function InputBar({ status, disabled, onSend }: Props) {
-  const [text, setText] = useState('');
-  const textareaRef     = useRef<HTMLTextAreaElement>(null);
+  const [text, setText]       = useState('');
+  const [focused, setFocused] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const canSend = status === 'connected' && text.trim().length > 0 && !disabled;
 
@@ -59,16 +67,11 @@ export default function InputBar({ status, disabled, onSend }: Props) {
     if (!canSend) return;
     onSend(text.trim());
     setText('');
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-    }
+    if (textareaRef.current) textareaRef.current.style.height = 'auto';
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
 
   const handleInput = () => {
@@ -78,60 +81,88 @@ export default function InputBar({ status, disabled, onSend }: Props) {
     el.style.height = Math.min(el.scrollHeight, 160) + 'px';
   };
 
+  const placeholder =
+    status === 'connected'    ? '发消息给 AI agent…  (Enter 发送，Shift+Enter 换行)' :
+    status === 'connecting'   ? '正在连接网关…' :
+    '未连接到网关';
+
   return (
-    <div
-      className="px-4 py-3 border-t"
-      style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' }}
-    >
-      <StatusDot status={status} />
-      <div
-        className="flex items-end gap-2 mt-2 rounded-xl border px-3 py-2 transition-colors"
-        style={{
-          borderColor: text.length > 0 ? 'var(--accent)' : 'var(--border)',
-          background: 'var(--bg-base)',
-          boxShadow: text.length > 0 ? '0 0 0 2px rgba(0,200,232,0.08)' : 'none',
-        }}
-      >
+    <div style={{
+      padding: '10px 14px',
+      background: 'var(--bg-surface)',
+      borderTop: '1px solid rgba(255,255,255,0.07)',
+      flexShrink: 0,
+    }}>
+      {/* Status row */}
+      <div style={{ marginBottom: 7 }}>
+        <StatusIndicator status={status} />
+      </div>
+
+      {/* Input row */}
+      <div style={{
+        display: 'flex', alignItems: 'flex-end', gap: 0,
+        border: '1px solid',
+        borderColor: focused && canSend ? 'rgba(52,211,153,0.4)'
+                   : focused           ? 'rgba(255,255,255,0.14)'
+                   : 'rgba(255,255,255,0.08)',
+        borderRadius: 12,
+        boxShadow: focused && canSend ? '0 0 16px rgba(52,211,153,0.08)' : 'none',
+        background: 'rgba(255,255,255,0.03)',
+        overflow: 'hidden',
+        transition: 'border-color 200ms, box-shadow 200ms',
+      }}>
         <textarea
           ref={textareaRef}
           value={text}
           onChange={e => setText(e.target.value)}
           onKeyDown={handleKeyDown}
           onInput={handleInput}
-          placeholder={
-            status === 'connected'
-              ? '发消息给 AI agent… (Enter 发送，Shift+Enter 换行)'
-              : status === 'connecting' ? '正在连接网关…'
-              : '未连接到网关'
-          }
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          placeholder={placeholder}
           disabled={status !== 'connected' || disabled}
           rows={1}
           style={{
-            flex: 1,
-            resize: 'none',
-            background: 'transparent',
-            border: 'none',
-            outline: 'none',
-            fontSize: 14,
-            lineHeight: 1.6,
+            flex: 1, resize: 'none',
+            background: 'transparent', border: 'none', outline: 'none',
+            fontSize: 13, lineHeight: 1.6,
             fontFamily: 'var(--font-ui)',
             color: 'var(--text-primary)',
-            maxHeight: 160,
-            overflowY: 'auto',
+            maxHeight: 160, overflowY: 'auto',
+            padding: '10px 12px',
           }}
           className="dc-scroll"
         />
+        {/* Send button */}
         <button
           onClick={handleSend}
           disabled={!canSend}
-          style={{ background: 'none', border: 'none', cursor: canSend ? 'pointer' : 'not-allowed', padding: '2px', lineHeight: 0 }}
-          title="发送 (Enter)"
+          style={{
+            padding: '0 14px',
+            alignSelf: 'stretch',
+            border: 'none',
+            borderLeft: '1px solid',
+            borderLeftColor: canSend ? 'rgba(52,211,153,0.25)' : 'rgba(255,255,255,0.06)',
+            background: canSend ? 'rgba(52,211,153,0.1)' : 'transparent',
+            cursor: canSend ? 'pointer' : 'not-allowed',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            transition: 'background 200ms, border-color 200ms',
+            flexShrink: 0, minWidth: 44,
+          }}
+          title="Send (Enter)"
         >
-          <SendIcon active={canSend} />
+          <SendArrow active={canSend} />
         </button>
       </div>
-      <div className="text-right mt-1" style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: '0.04em' }}>
-        Shift+Enter 换行
+
+      {/* Hint */}
+      <div style={{
+        textAlign: 'right', marginTop: 5,
+        fontSize: 9, color: 'var(--text-muted)',
+        fontFamily: 'var(--font-mono)', letterSpacing: '0.08em',
+        textTransform: 'uppercase',
+      }}>
+        Shift+Enter new line
       </div>
     </div>
   );

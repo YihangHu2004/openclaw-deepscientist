@@ -8,72 +8,61 @@ function prettyJson(v: unknown): string {
   catch { return String(v); }
 }
 
-// ─── Rectangular LED indicator (DS-style) ─────────────────────────────────────
-function Indicator({ isResult }: { isResult: boolean }) {
-  return (
-    <span style={{
-      display: 'inline-block',
-      width: 5, height: 12, borderRadius: 1,
-      flexShrink: 0,
-      background: isResult ? '#10b981' : '#00c8e8',
-      boxShadow: isResult
-        ? '0 0 6px #10b981'
-        : '0 0 6px #00c8e8',
-    }} />
-  );
-}
-
-// ─── ToolCallCard ─────────────────────────────────────────────────────────────
+// ─── ToolCallCard (brutalist orange/lime) ────────────────────────────────────
 
 export default function ToolCallCard({ block }: { block: ContentBlock }) {
   const [open, setOpen] = useState(false);
   const isResult = block.type === 'toolResult';
-  const label    = isResult ? `RESULT: ${String(block.id ?? '').slice(0, 8)}` : String(block.name ?? 'tool_call').toUpperCase();
+
+  const accentColor = isResult ? 'var(--nb-lime)' : 'var(--nb-orange)';
+  const accentBg    = isResult ? 'rgba(204,255,0,0.04)' : 'rgba(255,149,0,0.04)';
+  const accentDark  = isResult ? '#0a0a00' : '#0a0600';
+  const label       = isResult
+    ? `RESULT: ${String(block.id ?? '').slice(0, 8)}`
+    : String(block.name ?? 'TOOL_CALL').toUpperCase();
   const bodyJson = isResult ? prettyJson(block.result) : prettyJson(block.arguments);
 
   return (
     <div
-      className="my-1.5 overflow-hidden"
+      className="my-2 overflow-hidden"
       style={{
-        background: '#020617',
-        border: '1px solid',
-        borderColor: isResult ? 'rgba(16,185,129,0.22)' : 'rgba(0,200,232,0.18)',
-        borderRadius: 6,
-        boxShadow: isResult
-          ? '0 0 14px rgba(16,185,129,0.08)'
-          : '0 0 14px rgba(0,200,232,0.07)',
-        transition: 'border-color var(--dur-normal) var(--ease-snappy), box-shadow var(--dur-normal) var(--ease-snappy)',
+        background: accentBg,
+        border: `2px solid ${accentColor}`,
+        boxShadow: `3px 3px 0px ${accentColor}`,
       }}
     >
       {/* Header */}
       <button
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center gap-2 text-left"
+        className="w-full flex items-center gap-2.5 text-left"
         style={{
           padding: '8px 12px',
-          background: isResult ? 'rgba(16,185,129,0.06)' : 'rgba(0,200,232,0.05)',
-          border: 'none', cursor: 'pointer',
-          borderBottom: open ? '1px solid rgba(255,255,255,0.04)' : 'none',
-          transition: 'background var(--dur-fast) var(--ease-snappy)',
+          background: 'transparent',
+          border: 'none',
+          borderBottom: open ? `1px solid ${accentColor}33` : 'none',
+          cursor: 'pointer',
         }}
       >
-        <Indicator isResult={isResult} />
+        {/* Square LED */}
+        <span style={{
+          width: 8, height: 8,
+          background: accentColor,
+          display: 'inline-block', flexShrink: 0,
+        }} />
 
         <span style={{
           fontFamily: 'var(--font-mono)', fontSize: 10,
-          fontWeight: 600, letterSpacing: '0.06em',
-          color: isResult ? '#34d399' : '#22d3ee',
-          textShadow: isResult
-            ? '0 0 7px rgba(52,211,153,0.35)'
-            : '0 0 7px rgba(34,211,238,0.35)',
+          fontWeight: 700, letterSpacing: '0.1em',
+          textTransform: 'uppercase',
+          color: accentColor,
         }}>
           {label}
         </span>
 
-        <span className="ml-auto" style={{
+        <span style={{
+          marginLeft: 'auto',
           fontFamily: 'var(--font-mono)', fontSize: 10,
-          color: isResult ? 'rgba(52,211,153,0.5)' : 'rgba(34,211,238,0.4)',
-          letterSpacing: '0.04em',
+          color: accentColor, opacity: 0.6,
         }}>
           {open ? '▲' : '▼'}
         </span>
@@ -86,12 +75,11 @@ export default function ToolCallCard({ block }: { block: ContentBlock }) {
           style={{
             maxHeight: 280, overflowY: 'auto',
             padding: '10px 12px',
+            background: accentDark,
             fontFamily: 'var(--font-mono)',
-            fontSize: 11,
-            lineHeight: 1.55,
-            color: isResult ? '#34d399' : '#22d3ee',
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-all',
+            fontSize: 11, lineHeight: 1.55,
+            color: accentColor,
+            whiteSpace: 'pre-wrap', wordBreak: 'break-all',
           }}
         >
           {bodyJson}

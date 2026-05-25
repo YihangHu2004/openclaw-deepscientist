@@ -9,6 +9,8 @@
 const fs        = require('fs');
 const path      = require('path');
 const http      = require('http');
+const net       = require('net');
+const { spawn } = require('child_process');
 const os        = require('os');
 const crypto    = require('crypto');
 const express   = require('express');
@@ -18,8 +20,9 @@ const cors      = require('cors');
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 const PORT           = parseInt(process.env.DEEPCLAW_UI_PORT || '19000', 10);
+const NEXT_PORT      = parseInt(process.env.DEEPCLAW_NEXT_PORT || String(PORT + 1), 10);
+const CLIENT_DIR     = path.join(__dirname, '..', 'client');
 const OPENCLAW_HOME  = path.join(os.homedir(), '.openclaw');
-const CLIENT_BUILD   = path.join(__dirname, '..', 'client', 'out');
 
 function readGatewayConfig() {
   try {
@@ -468,19 +471,40 @@ app.get('/api/projects/:slug/file', async (req, res) => {
   } catch (err) { res.status(500).send(err.message); }
 });
 
-// ─── Static: serve Next.js build ─────────────────────────────────────────────
+// ─── HTTP proxy → Next.js ─────────────────────────────────────────────────────
 
-if (fs.existsSync(CLIENT_BUILD)) {
-  app.use(express.static(CLIENT_BUILD));
-  app.get('*', (_req, res) => {
-    const idx = path.join(CLIENT_BUILD, 'index.html');
-    fs.existsSync(idx) ? res.sendFile(idx) : res.status(404).send('Build missing');
+function proxyToNext(req, res) {
+  const proxyReq = http.request({
+    hostname: '127.0.0.1',
+    port:     NEXT_PORT,
+    path:     req.url,
+    method:   req.method,
+    headers:  { ...req.headers, host: `127.0.0.1:${NEXT_PORT}` },
+  }, proxyRes => {
+    if (!res.headersSent)
+      res.writeHead(proxyRes.statusCode || 200, proxyRes.headers);
+    proxyRes.pipe(res, { end: true });
   });
-} else {
-  app.get('/', (_req, res) => {
-    res.send(`<h2>DeepClaw UI server (:${PORT})</h2><p>Frontend not built yet. Run Next.js dev on :3000.</p>`);
+
+  proxyReq.on('error', () => {
+    if (!res.headersSent) {
+      res.type('html').status(502).send(
+        '<html><head><meta charset="utf-8"><style>' +
+        'body{font-family:monospace;display:flex;align-items:center;justify-content:center;' +
+        'height:100vh;margin:0;background:#0a0a0a;color:#ccff00;text-align:center}' +
+        'p{color:#555}</style></head><body>' +
+        '<div><div style="font-size:32px;margin-bottom:12px">◈</div>' +
+        '<h2 style="margin:0 0 8px;letter-spacing:.1em">STARTING UP</h2>' +
+        '<p>Next.js is initializing — refreshing in 3s…</p>' +
+        '<script>setTimeout(()=>location.reload(),3000)</script></div></body></html>'
+      );
+    }
   });
+
+  req.pipe(proxyReq, { end: true });
 }
+
+app.use((req, res) => proxyToNext(req, res));
 
 // ─── HTTP server + WebSocket proxy ───────────────────────────────────────────
 
@@ -490,9 +514,21 @@ const wss    = new WebSocket.Server({ noServer: true });
 server.on('upgrade', (req, socket, head) => {
   if (req.url === '/ws/gateway') {
     wss.handleUpgrade(req, socket, head, ws => wss.emit('connection', ws, req));
-  } else {
-    socket.destroy();
+    return;
   }
+  // Proxy all other WS upgrades to Next.js (HMR in dev mode)
+  const proxySocket = net.createConnection(NEXT_PORT, '127.0.0.1');
+  proxySocket.on('connect', () => {
+    const hdrs = Object.entries(req.headers)
+      .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`)
+      .join('\r\n');
+    proxySocket.write(`${req.method} ${req.url} HTTP/1.1\r\n${hdrs}\r\n\r\n`);
+    if (head?.length) proxySocket.write(head);
+    socket.pipe(proxySocket);
+    proxySocket.pipe(socket);
+  });
+  proxySocket.on('error', () => { try { socket.destroy(); } catch {} });
+  socket.on('error', () => { try { proxySocket.destroy(); } catch {} });
 });
 
 wss.on('connection', (clientWs) => {
@@ -606,8 +642,38 @@ wss.on('connection', (clientWs) => {
   clientWs.on('error', err => { console.error('[client-ws]', err.message); gwWs?.close(); });
 });
 
+// ─── Start Next.js ────────────────────────────────────────────────────────────
+
+function spawnNextJs() {
+  const hasBuild = fs.existsSync(path.join(CLIENT_DIR, '.next', 'BUILD_ID'));
+  const mode     = hasBuild ? 'start' : 'dev';
+  const args     = mode === 'dev'
+    ? ['next', 'dev', '-p', String(NEXT_PORT), '--turbopack']
+    : ['next', 'start', '-p', String(NEXT_PORT)];
+
+  console.log(`[next] ${mode.toUpperCase()} on port ${NEXT_PORT}${hasBuild ? '' : ' (no build found — run npm run build for faster startup)'}`);
+  // On Windows use cmd /c to run npx; on Unix run directly (no shell needed)
+  const [cmd, cmdArgs] = process.platform === 'win32'
+    ? ['cmd', ['/c', 'npx', ...args]]
+    : ['npx', args];
+  const proc = spawn(cmd, cmdArgs, {
+    cwd:   CLIENT_DIR,
+    stdio: 'inherit',
+    env:   { ...process.env },
+  });
+  proc.on('error', err  => console.error('[next] spawn error:', err.message));
+  proc.on('exit',  code => code !== 0 && console.error(`[next] exited with code ${code}`));
+  ['exit', 'SIGINT', 'SIGTERM'].forEach(sig =>
+    process.on(sig, () => { try { proc.kill(); } catch {} })
+  );
+  return proc;
+}
+
+spawnNextJs();
+
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`✅ DeepClaw UI: http://127.0.0.1:${PORT}`);
+  console.log(`   Next.js:     http://127.0.0.1:${NEXT_PORT} (proxied)`);
   console.log(`   WS proxy:    ws://127.0.0.1:${PORT}/ws/gateway → ${GATEWAY_WS_URL}`);
   console.log(`   Workspace:   ${WORKSPACE_ROOT}`);
 });

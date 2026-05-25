@@ -8,28 +8,21 @@ import { fetchProjectFiles, fetchProjectFileText, projectFileUrl, FileItem } fro
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
 function FolderIcon({ open }: { open: boolean }) {
-  const c = open ? 'var(--accent-dim)' : 'var(--text-secondary)';
   return (
     <svg width="14" height="13" viewBox="0 0 14 13" fill="none" style={{ flexShrink: 0 }}>
       <path d={open
         ? 'M1 4h12v7a1 1 0 01-1 1H2a1 1 0 01-1-1V4z M1 4V3a1 1 0 011-1h2.5l1.5 2H1z'
         : 'M1 3h12v8a1 1 0 01-1 1H2a1 1 0 01-1-1V3z M1 3V2a1 1 0 011-1h2.5l1.5 2H1z'}
-        stroke={c} strokeWidth="1.1" strokeLinejoin="round" fill="none"/>
+        stroke="rgba(255,255,255,0.4)" strokeWidth="1.3" strokeLinejoin="round" fill="none"/>
     </svg>
   );
 }
 
-function FileIcon({ name }: { name: string }) {
-  const ext = name.split('.').pop()?.toLowerCase() ?? '';
-  const colors: Record<string, string> = {
-    md: 'var(--accent)', html: '#f97316', json: '#eab308', csv: '#22c55e',
-    pdf: '#ef4444', png: '#a855f7', jpg: '#a855f7', jpeg: '#a855f7', pptx: '#f97316',
-  };
-  const c = colors[ext] ?? 'var(--text-secondary)';
+function FileIcon() {
   return (
     <svg width="12" height="15" viewBox="0 0 12 15" fill="none" style={{ flexShrink: 0 }}>
       <path d="M2 1h6l3 3v9a1 1 0 01-1 1H2a1 1 0 01-1-1V2a1 1 0 011-1z M8 1v4h3"
-            stroke={c} strokeWidth="1.1" strokeLinejoin="round" fill="none"/>
+            stroke="rgba(255,255,255,0.35)" strokeWidth="1.3" strokeLinejoin="round" fill="none"/>
     </svg>
   );
 }
@@ -69,19 +62,21 @@ function TreeNode({ slug, name, fullPath, isDir, level, selected, onFile }: Node
     <div>
       <div
         onClick={toggle}
-        className="flex items-center gap-1.5 cursor-pointer select-none rounded-sm"
+        className="flex items-center gap-1.5 cursor-pointer select-none"
         style={{
-          padding: `3px 8px 3px ${level * 14 + 8}px`,
-          fontSize: 12.5,
-          color: isSelected ? 'var(--accent)' : isDir ? 'var(--text-primary)' : 'var(--text-secondary)',
-          background: isSelected ? 'rgba(0,200,232,0.1)' : 'transparent',
-          borderRadius: 4,
-          transition: 'background 0.15s cubic-bezier(0.16, 1, 0.3, 1), color 0.15s',
+          padding: `4px 8px 4px ${level * 14 + 8}px`,
+          fontSize: 12,
+          color: isSelected ? 'var(--cm-emerald)' : 'var(--text-secondary)',
+          background: isSelected ? 'rgba(52,211,153,0.08)' : 'transparent',
+          borderRadius: 6,
+          fontWeight: isSelected ? 500 : 400,
+          transition: 'background 150ms, color 150ms',
+          margin: '1px 4px',
         }}
-        onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
-        onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent'; }}
+        onMouseEnter={e => { if (!isSelected) { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = 'var(--text-primary)'; } }}
+        onMouseLeave={e => { if (!isSelected) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; } }}
       >
-        {isDir ? <FolderIcon open={open} /> : <FileIcon name={name} />}
+        {isDir ? <FolderIcon open={open} /> : <FileIcon />}
         <span className="truncate">{name}</span>
         {isDir && (
           <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--text-muted)' }}>
@@ -231,32 +226,44 @@ export default function WorkPanel({ slug, mode, onFileOpen, onExpand, onCollapse
   const previewVisible = selectedFile !== null;
 
   return (
-    <div className="flex h-full border-l" style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-base)' }}>
+    <div className="flex h-full border-l" style={{ borderColor: 'rgba(255,255,255,0.07)', borderLeftWidth: 1, background: 'var(--bg-base)' }}>
       {/* File tree sidebar */}
       <div
         style={{ width: treeW, flexShrink: 0, overflow: 'hidden',
-                 transition: 'width 0.25s ease', borderRight: '1px solid var(--border-subtle)',
-                 display: 'flex', flexDirection: 'column', background: 'var(--bg-surface)' }}
+                 transition: 'width 0.25s ease',
+                 borderRight: '1px solid rgba(255,255,255,0.07)',
+                 display: 'flex', flexDirection: 'column',
+                 background: 'var(--bg-surface)' }}
       >
         {/* Tree header */}
         <div className="flex items-center justify-between px-3 py-2 border-b shrink-0"
-             style={{ borderColor: 'var(--border-subtle)', minWidth: 0 }}>
-          <div className="flex items-center gap-1.5" style={{ fontSize: 11, fontWeight: 600,
-               color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+             style={{ borderColor: 'rgba(255,255,255,0.07)', borderBottomWidth: 1, minWidth: 0 }}>
+          <div className="flex items-center gap-1.5" style={{ fontSize: 10, fontWeight: 500,
+               color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: 'var(--font-mono)' }}>
             <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
-              <path d="M1 2h3l1.5 2H10v6H1V2z" stroke="var(--accent-dim)" strokeWidth="1.1" strokeLinejoin="round" fill="none"/>
+              <path d="M1 2h3l1.5 2H10v6H1V2z" stroke="rgba(255,255,255,0.3)" strokeWidth="1.3" strokeLinejoin="round" fill="none"/>
             </svg>
-            工作区
+            Workspace
           </div>
-          <button onClick={loadRoots} className="dc-btn-ghost" style={{ fontSize: 10, padding: '2px 5px' }}>刷新</button>
+          <button onClick={loadRoots} style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: 'var(--text-muted)', fontSize: 10, padding: '2px 5px',
+            fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.06em',
+            transition: 'color 150ms',
+          }}
+          onMouseEnter={e => e.currentTarget.style.color = 'var(--cm-emerald)'}
+          onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
+          >↻</button>
         </div>
 
         {/* Tree body */}
-        <div className="flex-1 overflow-y-auto dc-scroll py-1">
+        <div className="flex-1 overflow-y-auto py-1 dc-scroll" style={{
+          scrollbarWidth: 'thin',
+        }}>
           {rootsLoading ? (
-            <div style={{ padding: '12px 16px', fontSize: 12, color: 'var(--text-muted)' }}>加载中…</div>
+            <div style={{ padding: '12px 16px', fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>Loading…</div>
           ) : roots.length === 0 ? (
-            <div style={{ padding: '12px 16px', fontSize: 12, color: 'var(--text-muted)' }}>暂无文件</div>
+            <div style={{ padding: '12px 16px', fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>Empty</div>
           ) : (
             roots.map(r => (
               <TreeNode key={r.name} slug={slug} name={r.name} fullPath={r.name}
@@ -283,7 +290,7 @@ export default function WorkPanel({ slug, mode, onFileOpen, onExpand, onCollapse
           <>
             {/* Preview header */}
             <div className="flex items-center gap-2 px-3 py-2 border-b shrink-0"
-                 style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-surface)' }}>
+                 style={{ borderColor: 'var(--border)', borderBottomWidth: 2, background: 'var(--bg-surface)' }}>
               {/* Toggle tree (full mode) */}
               {mode === 'full' && (
                 <button onClick={() => setTreeVis(v => !v)} className="dc-btn-ghost" style={{ fontSize: 11 }}>

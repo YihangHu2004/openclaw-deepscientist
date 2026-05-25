@@ -33,29 +33,29 @@ function historyToChat(hm: HistoryMessage): ChatMessage {
 // ─── No-session state ─────────────────────────────────────────────────────────
 function NoSessionState({ onCreateSession, creating }: { onCreateSession?: () => void; creating: boolean }) {
   return (
-    <div className="flex flex-col items-center justify-center h-full gap-4" style={{ color: '#94a3b8' }}>
-      <svg width="44" height="44" viewBox="0 0 44 44" fill="none">
-        <circle cx="22" cy="22" r="9"  fill="none" stroke="var(--border)"        strokeWidth="1.5"/>
-        <circle cx="22" cy="22" r="16" fill="none" stroke="var(--border-subtle)" strokeWidth="1"/>
-        <circle cx="22" cy="22" r="3.5" fill="var(--border)"/>
+    <div className="flex flex-col items-center justify-center h-full gap-5" style={{ color: 'var(--text-muted)' }}>
+      <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+        <circle cx="24" cy="24" r="10"  fill="none" stroke="rgba(52,211,153,0.2)" strokeWidth="1.5"/>
+        <circle cx="24" cy="24" r="18" fill="none" stroke="rgba(52,211,153,0.08)" strokeWidth="1"/>
+        <circle cx="24" cy="24" r="4"  fill="rgba(52,211,153,0.15)"/>
       </svg>
       {onCreateSession ? (
         <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 12 }}>
-            此项目尚未绑定 Session
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16, fontFamily: 'var(--font-ui)' }}>
+            No session linked to this project
           </div>
           <button
             onClick={onCreateSession}
             disabled={creating}
             className="dc-btn dc-btn-primary"
-            style={{ fontSize: 12, padding: '6px 14px' }}
+            style={{ fontSize: 12, padding: '7px 18px' }}
           >
-            {creating ? '创建中…' : '新建 Session 开始对话'}
+            {creating ? 'Creating…' : 'New Session'}
           </button>
         </div>
       ) : (
-        <div style={{ fontSize: 13, color: 'var(--text-secondary)', textAlign: 'center' }}>
-          选择左侧会话开始对话
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', fontFamily: 'var(--font-mono)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+          Select a session
         </div>
       )}
     </div>
@@ -182,13 +182,13 @@ export default function ChatPanel({ sessionId, sessionKey, slug, initialMessage,
             creating={creating}
           />
         ) : histLoading ? (
-          <div className="flex items-center justify-center h-full gap-2" style={{ color: '#94a3b8', fontSize: 14 }}>
-            <span className="pulse-dot inline-block w-2 h-2 rounded-full" style={{ background: 'var(--dc-teal)' }} />
-            加载历史消息…
+          <div className="flex items-center justify-center h-full gap-2.5" style={{ color: 'var(--text-muted)', fontSize: 12, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+            <span className="pulse-dot inline-block" style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--cm-emerald)', display: 'inline-block' }} />
+            Loading…
           </div>
         ) : messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-4">
-            <div style={{ fontSize: 14, color: 'var(--text-secondary)' }}>暂无消息记录</div>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)', fontFamily: 'var(--font-ui)' }}>No messages yet</div>
             {slug && (
               <button
                 onClick={handleInitWorkspace}
@@ -210,18 +210,24 @@ export default function ChatPanel({ sessionId, sessionKey, slug, initialMessage,
             ))}
             {/* Streaming placeholder */}
             {streamingText && (
-              <div className="flex gap-2.5 mb-4 msg-enter" style={{ alignItems: 'flex-start' }}>
-                {/* AiMark — matches MessageBubble */}
+              <div className="flex gap-2.5 mb-5 msg-enter" style={{ alignItems: 'flex-start' }}>
+                {/* AI indicator */}
                 <div style={{
                   flexShrink: 0, width: 22, height: 22, marginTop: 2,
-                  border: '1px solid rgba(0,200,232,0.3)', borderRadius: 3,
+                  border: '1px solid rgba(129,140,248,0.4)',
+                  borderRadius: '50%',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  background: 'rgba(0,200,232,0.06)',
+                  background: 'rgba(129,140,248,0.08)',
                 }}>
-                  <span className="pulse-dot inline-block" style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--accent)' }} />
+                  <span className="pulse-dot inline-block"
+                        style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--cm-indigo)', display: 'inline-block' }} />
                 </div>
-                <div className="dc-prose"
-                  style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 4, padding: '10px 14px', flex: 1, minWidth: 0 }}>
+                <div className="dc-prose" style={{
+                  background: 'rgba(255,255,255,0.03)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  borderRadius: 12,
+                  padding: '10px 14px', flex: 1, minWidth: 0,
+                }}>
                   {streamingText}
                   <span className="typing-cursor" />
                 </div>
