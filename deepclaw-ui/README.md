@@ -1,250 +1,170 @@
 # DeepClaw UI
 
-Research-grade frontend for OpenClaw/DeepScientist AI agents. Provides real-time chat, project workspace, and file browser, all connected through a local proxy server.
+Local frontend for OpenClaw / DeepScientist AI agents. Provides real-time chat, project workspace, and file browser.
 
 ```
 Browser ──► Proxy Server (:19000) ──► OpenClaw Gateway (:18789)
               │
-              ├─ Serves Next.js static build
-              ├─ REST API  /api/sessions  /api/projects  /api/workspace
-              └─ WebSocket /ws/gateway   (auth handled server-side)
+              ├─ Spawns Next.js internally (auto dev or prod mode)
+              ├─ REST API   /api/sessions  /api/projects  /api/workspace
+              └─ WebSocket  /ws/gateway   (auth handled server-side)
 ```
-
----
-
-## Quick start (one command)
 
 Requires **Node.js ≥ 18** and a running **OpenClaw** installation.
 
+---
+
+## Quick start
+
 ```powershell
 # Windows
-git clone <repo> deepclaw-ui
-cd deepclaw-ui
+git clone <repo> deepclaw-ui && cd deepclaw-ui
 .\install.ps1
 ```
 
 ```bash
 # Mac / Linux
-git clone <repo> deepclaw-ui
-cd deepclaw-ui
+git clone <repo> deepclaw-ui && cd deepclaw-ui
 bash install.sh
 ```
 
 Open **http://127.0.0.1:19000**.
 
+The install script installs dependencies, builds the frontend, and starts the server. The server spawns Next.js automatically — no separate process needed.
+
 ---
 
-## Manual setup — step by step
+## How it works
 
-Use this section if the install script fails, or if you want to understand each step.
+`node server/index.js` does everything in a single process:
 
-### Step 1 — Verify Node.js
+1. Starts an Express server on port 19000.
+2. Checks whether a production build exists (`client/.next/BUILD_ID`).
+   - Build found → spawns `next start` on port 20000 (fast, production mode).
+   - No build → spawns `next dev` on port 20000 (hot reload, slower startup).
+3. Proxies all HTTP requests (except `/api/*`) to the Next.js process.
+4. Handles `/api/*` routes directly (sessions, projects, workspace files).
+5. Tunnels `/ws/gateway` WebSocket connections to the OpenClaw gateway, adding authentication server-side.
+
+You always open **http://127.0.0.1:19000** — not the Next.js port directly.
+
+---
+
+## Manual setup
+
+### 1. Verify Node.js
 
 ```powershell
-node --version   # must print v18.x or higher
-npm --version
+node --version   # must be v18 or higher
 ```
 
-If Node.js is missing: download from https://nodejs.org (LTS edition).
+Download from https://nodejs.org (LTS) if missing.
 
----
-
-### Step 2 — Verify OpenClaw is installed
-
-The proxy server reads config from `~/.openclaw/`. OpenClaw must have run at least once.
+### 2. Verify OpenClaw config exists
 
 ```powershell
 # Windows
 Test-Path "$env:USERPROFILE\.openclaw\openclaw.json"   # must print True
-
 # Mac/Linux
-test -f ~/.openclaw/openclaw.json && echo "OK" || echo "MISSING"
+test -f ~/.openclaw/openclaw.json && echo OK || echo MISSING
 ```
 
-If missing: install OpenClaw and run it once so it creates its config files.
+If missing: run the OpenClaw app or CLI once — it creates the config automatically.
 
----
-
-### Step 3 — Find your gateway token and port
-
-Open `~/.openclaw/openclaw.json` and locate the `gateway` section:
-
-```json
-"gateway": {
-    "port":  18789,
-    "auth":  {
-        "mode":  "token",
-        "token": "5cc69cec..."
-    }
-}
-```
-
-Note the **port** (default `18789`) and **token**. The proxy server reads these automatically — you do not need to copy them anywhere. This step is just for verification.
-
----
-
-### Step 4 — Confirm OpenClaw gateway is running
+### 3. Install dependencies
 
 ```powershell
-# Windows — check if port 18789 is listening
-netstat -ano | findstr :18789
-# Expected: TCP  0.0.0.0:18789  ... LISTENING
+cd server && npm install && cd ..
+cd client && npm install && cd ..
 ```
 
-```bash
-# Mac/Linux
-lsof -i :18789 | grep LISTEN
-```
-
-If nothing is listening, start the gateway. On Windows, OpenClaw creates `~/.openclaw/gateway.cmd`:
+### 4. Build the frontend (recommended for production use)
 
 ```powershell
-& "$env:USERPROFILE\.openclaw\gateway.cmd"
-# Or start it through the OpenClaw app / system tray
-```
-
----
-
-### Step 5 — Install server dependencies
-
-```powershell
-cd path\to\deepclaw-ui\server
-npm install
-```
-
-Expected output ends with something like:
-```
-added 87 packages in 4s
-```
-
-Installed packages: `express`, `ws`, `cors`.
-
----
-
-### Step 6 — Install client dependencies
-
-```powershell
-cd path\to\deepclaw-ui\client
-npm install
-```
-
-This installs Next.js 15, React 19, and all frontend dependencies (~200 packages, may take 30–60 seconds).
-
----
-
-### Step 7 — Build the frontend
-
-```powershell
-cd path\to\deepclaw-ui\client
-$env:NEXT_TELEMETRY_DISABLED = "1"   # optional: disable Next.js telemetry
+cd client
 npm run build
 ```
 
-Expected output ends with:
-```
-✓ Compiled successfully
-Route (app)    Size
-┌ ○ /          ...
-└ ○ /project/[slug]  ...
-```
+Generates `client/.next/`. Without this step the server falls back to dev mode automatically — functional but slower to start.
 
-The build output goes to `client/out/`. If you skip this step, the proxy server will show a placeholder page and you must use dev mode instead (Step 9b).
-
----
-
-### Step 8 — Start the proxy server
+### 5. Start
 
 ```powershell
-cd path\to\deepclaw-ui\server
+cd server
 node index.js
 ```
 
-Expected startup output:
-
+Expected output:
 ```
 🔑 Device identity loaded: abc123...
+[next] START on port 20000
 ✅ DeepClaw UI: http://127.0.0.1:19000
+   Next.js:     http://127.0.0.1:20000 (proxied)
    WS proxy:    ws://127.0.0.1:19000/ws/gateway → ws://127.0.0.1:18789
    Workspace:   C:\Users\you\.openclaw\workspace-scientist\state\projects
 ```
 
-Verify the **Workspace** line points to your actual projects directory. If it is wrong, see the Configuration section below.
-
-Open **http://127.0.0.1:19000** in your browser.
+Check the **Workspace** line — it must point to your actual projects directory. See Configuration below if it is wrong.
 
 ---
 
-### Step 9 — Development mode (alternative to Steps 7–8)
+## Dev mode (hot reload)
 
-If you want live reload while editing the frontend:
+Skip the build step. The server will auto-start Next.js in dev mode when no build is found:
 
-**Terminal A — proxy server (with auto-restart on file changes):**
 ```powershell
-cd server
-npm run dev     # uses node --watch
+# Remove stale build if one exists, then start
+Remove-Item -ErrorAction SilentlyContinue client\.next\BUILD_ID
+cd server && node index.js
 ```
 
-**Terminal B — Next.js dev server:**
+Or use the install script flag:
+
 ```powershell
-cd client
-npm run dev     # http://localhost:3000, proxies /api/* to :19000
+.\install.ps1 -Dev
 ```
 
-Open **http://localhost:3000** (not port 19000) in dev mode.
+Open **http://127.0.0.1:19000**. Changes to files in `client/` take effect on page reload without restarting the server.
 
 ---
 
 ## Configuration
 
-The proxy server resolves settings in this priority order (first match wins):
+### Environment variables
 
-### Workspace path resolution
+| Variable | Default | Description |
+|---|---|---|
+| `DEEPCLAW_UI_PORT` | `19000` | Port the UI server listens on |
+| `OPENCLAW_WORKSPACE` | auto | Override workspace path: a name relative to `~/.openclaw/` (e.g. `workspace-research`) or an absolute path to the `projects/` directory |
 
-| Priority | Source | Example |
-|----------|--------|---------|
-| 1 | `OPENCLAW_WORKSPACE` env var | `workspace-research` or `/abs/path` |
-| 2 | `~/.openclaw/openclaw.json` → `agents.list` → scientist agent `workspace` field | automatic |
-| 3 | Scan `~/.openclaw/workspace-*/state/projects/` | automatic |
-| 4 | Hardcoded fallback | `~/.openclaw/workspace-scientist/state/projects` |
+Set before starting:
 
-In most cases **priority 2 is used** — the workspace path is read directly from `openclaw.json`, which is the same config file OpenClaw manages. No manual action needed.
-
-### All environment variables
-
-| Variable | What it does | Default |
-|----------|--------------|---------|
-| `DEEPCLAW_UI_PORT` | Port the UI server listens on | `19000` |
-| `OPENCLAW_WORKSPACE` | Override workspace: a name (relative to `~/.openclaw/`) or an absolute path to the `projects` directory | auto |
-
-**Windows (PowerShell), set before starting:**
 ```powershell
-$env:DEEPCLAW_UI_PORT    = "18791"
-$env:OPENCLAW_WORKSPACE  = "workspace-research"   # or "C:\MyProjects"
+# Windows
+$env:DEEPCLAW_UI_PORT   = "19000"
+$env:OPENCLAW_WORKSPACE = "workspace-research"
 node server\index.js
 ```
 
-**Mac/Linux:**
 ```bash
-DEEPCLAW_UI_PORT=18791 OPENCLAW_WORKSPACE=workspace-research node server/index.js
+# Mac/Linux
+DEEPCLAW_UI_PORT=19000 OPENCLAW_WORKSPACE=workspace-research node server/index.js
 ```
 
-**Persistent (PowerShell profile / .bashrc):**
-```powershell
-# Windows — add to $PROFILE
-$env:DEEPCLAW_UI_PORT = "19000"
-```
-```bash
-# Mac/Linux — add to ~/.bashrc or ~/.zshrc
-export DEEPCLAW_UI_PORT=19000
-```
+### Workspace path resolution
 
----
+The server resolves the workspace directory in this order:
 
-### Changing the gateway port or token
+1. `OPENCLAW_WORKSPACE` env var
+2. `~/.openclaw/openclaw.json` → `agents.list` → scientist agent `workspace` field
+3. Scan `~/.openclaw/workspace-*/state/projects/`
+4. Fallback: `~/.openclaw/workspace-scientist/state/projects`
 
-You never need to set these manually — they are read from `~/.openclaw/openclaw.json`. If the gateway is on a non-standard port, OpenClaw itself updates that file and the proxy server picks up the change on next restart.
+In a standard OpenClaw install, priority 2 resolves automatically.
 
-If you are running the gateway on a remote machine (advanced), you would need to modify `GATEWAY_WS_URL` in `server/index.js` directly.
+### Gateway port and token
+
+Read automatically from `~/.openclaw/openclaw.json`. No manual configuration needed.
 
 ---
 
@@ -253,101 +173,81 @@ If you are running the gateway on a remote machine (advanced), you would need to
 ```
 deepclaw-ui/
 ├── server/
-│   ├── index.js          # Express + WebSocket proxy (port 19000)
+│   ├── index.js        # Proxy server: Express + WS tunnel + Next.js spawn
 │   └── package.json
-├── client/               # Next.js 15 app
+├── client/             # Next.js 15 app (React 19, TypeScript, Tailwind)
 │   ├── app/
-│   │   ├── globals.css               # Design system tokens + animations
-│   │   ├── page.tsx                  # Landing page: project list
-│   │   └── project/[slug]/page.tsx   # Project workspace
+│   │   ├── page.tsx                      # Landing page
+│   │   ├── projects/page.tsx             # Project list
+│   │   └── project/[slug]/               # Project workspace
 │   ├── components/
-│   │   ├── LobsterLogo.tsx    # DeepClaw SVG brand mark
-│   │   ├── ProjectCard.tsx    # Project list row
-│   │   ├── ChatPanel.tsx      # Real-time chat
-│   │   ├── MessageBubble.tsx  # Message rendering (markdown, tool calls, thinking)
-│   │   ├── ToolCallCard.tsx   # Collapsible tool call display
-│   │   ├── InputBar.tsx       # Message input
-│   │   └── FileExplorer.tsx   # File tree + preview
+│   │   ├── LobsterLogo.tsx               # Brand mark
+│   │   ├── ChatPanel.tsx                 # Real-time chat
+│   │   ├── MessageBubble.tsx             # Message rendering (markdown, tools, thinking)
+│   │   ├── WorkPanel.tsx                 # File browser + preview
+│   │   ├── BladeCursor.tsx               # Custom cursor for inner pages
+│   │   └── InputBar.tsx                  # Message input
 │   ├── lib/
-│   │   ├── gateway.ts     # WebSocket hook: useGateway
-│   │   └── api.ts         # REST API helpers
-│   └── next.config.ts     # Dev proxy /api/* → :19000
-├── install.ps1            # Windows one-click install
-├── install.sh             # Mac/Linux one-click install
-├── package.json           # Root-level npm scripts
-├── .env.example           # All configurable env vars (copy to .env)
+│   │   ├── gateway.ts                    # WebSocket hook
+│   │   └── api.ts                        # REST helpers
+│   └── next.config.ts
+├── install.ps1         # Windows one-click setup
+├── install.sh          # Mac/Linux one-click setup
 └── .gitignore
 ```
 
 ---
 
-## REST API reference
+## REST API
 
-All endpoints served by the proxy server at port 19000.
+All served by the proxy server at port 19000.
 
 | Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/api/sessions` | All sessions (`?agent=scientist` to filter) |
+|---|---|---|
+| `GET` | `/api/sessions` | All sessions |
 | `GET` | `/api/sessions/:id` | Message history for a session |
-| `GET` | `/api/sessions/:id/linked-project` | Which project is bound to this session |
+| `GET` | `/api/sessions/:id/linked-project` | Project bound to this session |
 | `POST` | `/api/sessions/create` | Create a new session via gateway |
 | `GET` | `/api/projects` | All research projects |
 | `GET` | `/api/projects/:slug` | Single project metadata |
 | `GET` | `/api/projects/:slug/files` | Project file tree |
-| `GET` | `/api/projects/:slug/file?path=...` | File content or download |
-| `POST` | `/api/projects/:slug/bind-session` | Bind a session key to a project |
-| `POST` | `/api/projects/:slug/unbind-session` | Remove session binding |
+| `GET` | `/api/projects/:slug/file?path=...` | File content |
+| `POST` | `/api/projects/:slug/bind-session` | Bind a session to a project |
 | `WS` | `/ws/gateway` | WebSocket tunnel to OpenClaw gateway |
 
 ---
 
 ## Troubleshooting
 
-### "Port 19000 already in use"
-
+**Port 19000 already in use**
 ```powershell
-# Find which process owns port 19000
-netstat -ano | findstr :19000
-# Kill it (replace 1234 with the actual PID)
-taskkill /PID 1234 /F
+netstat -ano | findstr :19000   # find PID
+taskkill /PID <pid> /F
 ```
 
-### Workspace shows wrong path at startup
+**Workspace path is wrong at startup**
 
-The startup log line `Workspace: ...` tells you which directory the server resolved. If it is wrong:
+Check `~/.openclaw/openclaw.json` → `agents.list` → scientist agent `workspace` field. Or override:
+```powershell
+$env:OPENCLAW_WORKSPACE = "C:\exact\path\to\projects"
+node server\index.js
+```
 
-1. Check `~/.openclaw/openclaw.json` → `agents.list` — find your scientist agent entry and verify the `workspace` field.
-2. Or override explicitly:
-   ```powershell
-   $env:OPENCLAW_WORKSPACE = "C:\exact\path\to\projects"
-   node server\index.js
-   ```
+**Chat shows "未连接到网关"**
 
-### Chat shows "未连接到网关"
-
-The gateway is not running. Start it:
+The OpenClaw gateway is not running. Start it:
 ```powershell
 & "$env:USERPROFILE\.openclaw\gateway.cmd"
 ```
-Then refresh the page — the proxy server reconnects automatically.
+Then refresh — the proxy reconnects automatically.
 
-### "Could not read openclaw.json"
+**"Could not read openclaw.json"**
 
-OpenClaw was never initialized on this machine. Run the OpenClaw app or CLI at least once. It creates `~/.openclaw/openclaw.json` automatically.
+OpenClaw has not been initialized on this machine. Run it once to generate the config file.
 
-### Build fails: "Cannot find module 'next'"
+**Next.js fails to start**
 
-The client dependencies are not installed:
+Client dependencies are missing:
 ```powershell
-cd client
-npm install
+cd client && npm install
 ```
-
-### Frontend shows blank page or 404
-
-The Next.js build is missing. Run:
-```powershell
-cd client
-npm run build
-```
-Then restart the proxy server.
