@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback, KeyboardEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { createProject } from '@/lib/api';
+import { createProject, createSession, bindProjectSession } from '@/lib/api';
 
 interface Props {
   open:    boolean;
@@ -70,6 +70,10 @@ export default function LaunchDialog({ open, onClose }: Props) {
     setCreating(true); setError('');
     try {
       await createProject(slug);
+      // Create a session and bind it immediately so the project page
+      // can connect to the gateway and send the init message right away.
+      const { sessionKey } = await createSession();
+      await bindProjectSession(slug, sessionKey);
       const qs = direction.trim() ? `?init=${encodeURIComponent(direction.trim())}` : '';
       onClose();
       router.push(`/project/${encodeURIComponent(slug)}${qs}`);

@@ -52,7 +52,7 @@ export default function LandingPage() {
     const ringPos = { x: W/2, y: H/2, scale: 1, rotate: 0 };
 
     // ── constellation nodes (with push fields for spectral wave) ──────────
-    const nodes = Array.from({ length: 120 }, () => ({
+    const nodes = Array.from({ length: 200 }, () => ({
       x: Math.random() * W, y: Math.random() * H,
       vx: (Math.random() - 0.5) * 0.8, vy: (Math.random() - 0.5) * 0.8,
       r: Math.random() * 1.5 + 0.5,
