@@ -195,9 +195,21 @@ python scripts/ev_manager.py <slug> coverage state/projects/<slug>/report.md
 
 # 验证 MATERIAL GAP 比例
 python scripts/ev_manager.py <slug> gap-count state/projects/<slug>/report.md
+
+# 写综述/报告/审计前检索已读证据
+python scripts/evidence_memory.py <slug> query "<topic>" --top-k 5
+
 ```
 
 违反此规则（手动编辑 items）将导致 EV-xxx 编号冲突，破坏证据链完整性。
+
+### evidence_memory.json 结构
+
+路径：`state/projects/<slug>/evidence_memory.json`
+
+该文件由 `evidence.json` 自动生成，是可重建的检索缓存，不是事实源。S4 literature-synthesis、S6 report-writer、S7 claim-auditor 开始前必须先查询 evidence memory，优先使用返回的 EV，并继续在正文中保留 `[EV-xxx]` 标注。
+
+若 memory card 含 `relations.type=Contradict`，S4 综述和 S5 研究规划必须优先处理这些学术分歧，将其写入 Related Work 的争议讨论或转化为 Research Gap。
 
 ### evidence.json 结构
 
@@ -374,10 +386,10 @@ python scripts/ev_manager.py <slug> gap-count state/projects/<slug>/report.md
 | 1 | arxiv-search | `skills/arxiv-search/SKILL.md` | 研究主题 | 候选论文 + Triage 评分 | 文献覆盖门 |
 | 2 | semantic-scholar | `skills/semantic-scholar/SKILL.md` | 关键词/论文 ID | 高引论文 + 引用网络 | 文献覆盖门（共享） |
 | 3 | paper-reader | `skills/paper-reader/SKILL.md` | arXiv ID/URL | 结构化笔记 + EV 记录 | 精读完整门 |
-| 4 | literature-synthesis | `skills/literature-synthesis/SKILL.md` | 论文笔记 + evidence.json | Related Work + Gap 列表 | 综述质量门 |
+| 4 | literature-synthesis | `skills/literature-synthesis/SKILL.md` | 论文笔记 + evidence.json + evidence_memory.json | Related Work + Gap 列表 | 综述质量门 |
 | 5 | research-planner | `skills/research-planner/SKILL.md` | Gap 列表 | 实验设计 + 子问题 + 时间表 | 研究计划门 |
-| 6 | report-writer | `skills/report-writer/SKILL.md` | 全部前序产出 | report.md + report.html | 报告完整门 |
-| 7 | claim-auditor | `skills/claim-auditor/SKILL.md` | report.md + evidence.json | 审计报告（追加到 report.md） | 审计完整门（强制） |
+| 6 | report-writer | `skills/report-writer/SKILL.md` | 全部前序产出 + evidence_memory.json | report.md + report.html | 报告完整门 |
+| 7 | claim-auditor | `skills/claim-auditor/SKILL.md` | report.md + evidence.json + evidence_memory.json | 审计报告（追加到 report.md） | 审计完整门（强制） |
 | 8 | paper-reviewer | `skills/paper-reviewer/SKILL.md` | report.md | peer_review_{日期}.md | 评审完整门（强制） |
 | 9 | science-slides | `skills/science-slides/SKILL.md` | report.md | 开题报告.pptx | PPT 结构门（可选） |
 

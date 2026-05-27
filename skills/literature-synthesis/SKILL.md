@@ -4,6 +4,10 @@
 
 **输入**：`state/projects/<slug>/project.md` 中的论文库 + `evidence.json`。
 
+**证据记忆预检**：开始写 Related Work 前先运行 `python scripts/evidence_memory.py <slug> query "<topic>" --top-k 5`，优先使用返回的 EV。
+
+**冲突证据优先**：若 `evidence_memory.json` 中存在 `relations.type=Contradict` 的记录，撰写综述和 Research Gap 时必须优先整合这些对立证据，明确说明分歧双方及其对应 EV-ID。
+
 ---
 
 ## 生成步骤

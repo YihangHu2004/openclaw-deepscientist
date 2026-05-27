@@ -80,6 +80,15 @@ def init_project(slug: str, mode: str) -> None:
     }
     write_json(proj_dir / "evidence.json", evidence)
 
+    evidence_memory = {
+        "schema_version": 1,
+        "project": slug,
+        "updated_at": now_iso(),
+        "source_evidence_count": 0,
+        "cards": [],
+    }
+    write_json(proj_dir / "evidence_memory.json", evidence_memory)
+
     # ── project.md ────────────────────────────────────────────────────────────
     today = datetime.now().strftime("%Y-%m-%d")
     project_md = f"""# 项目：{slug}

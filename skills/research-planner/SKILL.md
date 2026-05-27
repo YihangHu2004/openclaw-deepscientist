@@ -2,6 +2,8 @@
 
 **触发**：文献综述完成，需将 Gap 转化为可执行研究计划。
 
+**冲突驱动 Gap**：规划研究方向前检查 `evidence_memory.json` 中 `relations.type=Contradict` 的记录。若存在对立证据，优先将其转化为 Research Gap、研究问题或实验假设，并保留双方 EV-ID。
+
 ---
 
 ## 工作流

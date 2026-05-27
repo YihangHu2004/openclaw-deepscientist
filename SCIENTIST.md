@@ -156,6 +156,7 @@ state/projects/<slug>/
 ├── TODO.md             # Planner-Executor 进度清单（checkbox，可随时编辑）
 ├── search_cache.json   # 搜索缓存（24 小时有效，含 triage 评分）
 ├── evidence.json       # 证据记忆（原文文段 + AI声明 + 位置，见 pipelines/research.md §R2）
+├── evidence_memory.json # 证据检索记忆（由 evidence.json 自动生成，可重建）
 ├── pipeline_state.json # 流水线状态（模式/当前阶段/门控结果/暂停点）
 ├── report.md           # 科研报告（Markdown）
 ├── report.html         # 科研报告（HTML，可直接分享）
@@ -180,9 +181,12 @@ state/baselines.json    # 数据集与基线注册表（Skill 5 读写）
 - 日志：每次会话结束前写入 `memory/YYYY-MM-DD.md`
 - 论文笔记：写入对应 `state/projects/<slug>/project.md`
 - 长期洞察：写入 `MEMORY.md`
+- 证据检索：S4 综述、S6 报告、S7 审计前先查询 `evidence_memory.json`
+- 学术分歧：若 `evidence_memory.json` 中存在 `relations.type=Contradict`，S4/S5 必须优先转化为争议讨论或 Research Gap
 
 **工具原则**
 - 搜索前查 `search_cache.json`（key = SHA1(query + "\n" + max_results)[:12]），24 小时内同 key 不重复请求
+- 写作/审计前查证据记忆：`python scripts/evidence_memory.py <slug> query "<topic>" --top-k 5`
 - 读论文：先 Trafilatura 语义提取 → BeautifulSoup 降级 → 正则去标签；超过 5000 tokens 保留前 2000 + 后 1000，中间注明省略
 - 每条文献结论写入 `evidence.json` 一条 EV 记录，禁止无来源声明
 - 报告同时输出 `.md` 和 `.html`

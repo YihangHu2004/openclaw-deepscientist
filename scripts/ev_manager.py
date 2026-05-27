@@ -21,6 +21,11 @@ sys.stderr.reconfigure(encoding="utf-8")
 from datetime import datetime, timezone
 from pathlib import Path
 
+try:
+    from evidence_memory import build_memory
+except Exception:  # pragma: no cover - cache sync must not block EV writes
+    build_memory = None
+
 WORKSPACE = Path(__file__).parent.parent
 STATE_DIR  = WORKSPACE / "state" / "projects"
 
@@ -40,6 +45,56 @@ def load_evidence(proj_dir: Path) -> dict:
 def save_evidence(proj_dir: Path, data: dict) -> None:
     ev_path = proj_dir / "evidence.json"
     ev_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def sync_evidence_memory(proj_dir: Path) -> list:
+    if build_memory is None:
+        print("⚠️  evidence_memory.py 不可用，已跳过证据记忆同步", file=sys.stderr)
+        return []
+    else:
+        try:
+            memory = build_memory(proj_dir, proj_dir.name)
+            return memory.get("_last_detected_conflicts", [])
+        except Exception as exc:
+            print(f"⚠️  证据记忆同步失败：{exc}", file=sys.stderr)
+            return []
+
+
+def append_conflict_todos(proj_dir: Path, conflicts: list) -> None:
+    if not conflicts:
+        return
+    todo_path = proj_dir / "TODO.md"
+    if not todo_path.exists():
+        return
+
+    lines = []
+    for conflict in conflicts:
+        new_ev = conflict.get("ev_id", "?")
+        old_ev = conflict.get("target_ev_id", "?")
+        reason = conflict.get("reason", "").strip()
+        suffix = f" — {reason}" if reason else ""
+        lines.append(f"- [ ] Resolve conflict between {new_ev} and {old_ev} in Lit Review{suffix}")
+
+    with todo_path.open("a", encoding="utf-8") as f:
+        f.write("\n## Scientific conflicts\n")
+        for line in lines:
+            f.write(f"{line}\n")
+
+
+def print_conflict_warnings(conflicts: list) -> None:
+    if not conflicts:
+        return
+
+    red = "\033[91m"
+    yellow = "\033[93m"
+    reset = "\033[0m"
+    for conflict in conflicts:
+        new_ev = conflict.get("ev_id", "?")
+        old_ev = conflict.get("target_ev_id", "?")
+        print(f"\n{red}[CONTROVERSY DETECTED]{reset} {new_ev} contradicts {old_ev}")
+        print(f"{yellow}new:{reset} {conflict.get('source_summary', '')[:180]}")
+        print(f"{yellow}old:{reset} {conflict.get('target_summary', '')[:180]}")
+        print(f"{yellow}reason:{reset} {conflict.get('reason', '')}")
 
 
 # ── Commands ───────────────────────────────────────────────────────────────────
@@ -65,6 +120,9 @@ def cmd_add(proj_dir: Path, args) -> None:
     }
     ev["items"].append(item)
     save_evidence(proj_dir, ev)
+    conflicts = sync_evidence_memory(proj_dir)
+    print_conflict_warnings(conflicts)
+    append_conflict_todos(proj_dir, conflicts)
 
     conf_icon = {"high": "🟢", "medium": "🟡", "low": "🔴"}.get(args.confidence, "⚪")
     print(f"✅ {ev_id} 已添加 {conf_icon}")
@@ -181,6 +239,7 @@ def cmd_audit(proj_dir: Path, args) -> None:
     old = target.get("audit_result")
     target["audit_result"] = args.result
     save_evidence(proj_dir, ev)
+    sync_evidence_memory(proj_dir)
 
     icon = {"faithful": "✅", "drifted": "⚠️ ", "unsupported": "❌"}.get(args.result, "?")
     print(f"{icon} {args.ev_id} 审计结果已记录：{args.result}")

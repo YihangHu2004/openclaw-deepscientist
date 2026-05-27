@@ -53,6 +53,25 @@ def load_evidence_count(proj_dir: Path) -> int:
     return len(ev.get("items", []))
 
 
+def load_memory_stats(proj_dir: Path) -> dict:
+    mem_path = proj_dir / "evidence_memory.json"
+    if not mem_path.exists():
+        return {"cards": 0, "high": 0, "unsupported": 0, "conflicts": 0}
+    memory = json.loads(mem_path.read_text(encoding="utf-8"))
+    cards = memory.get("cards", [])
+    conflicts = 0
+    for card in cards:
+        for relation in card.get("relations", []):
+            if relation.get("type") == "Contradict" or relation.get("relation") == "Contradict":
+                conflicts += 1
+    return {
+        "cards": len(cards),
+        "high": sum(1 for c in cards if c.get("confidence") == "high"),
+        "unsupported": sum(1 for c in cards if c.get("audit_result") == "unsupported"),
+        "conflicts": conflicts,
+    }
+
+
 def format_ts(ts: str) -> str:
     if not ts:
         return "未知"
@@ -101,6 +120,7 @@ def main() -> None:
     ic               = ps.get("interactive_checkpoint")
 
     ev_count = load_evidence_count(proj_dir)
+    mem_stats = load_memory_stats(proj_dir)
 
     stage_name = STAGE_NAMES.get(current_stage, f"stage-{current_stage}")
 
@@ -149,6 +169,9 @@ def main() -> None:
 
     # Evidence and gate summary
     print(f"║  📚 EV 记录数：{ev_count:<4}  🏛️  物料护照：{len(passport)} 条{'':<15}║")
+    print(f"║  🧠 证据记忆：{mem_stats['cards']:<4}  高置信：{mem_stats['high']:<4}  未支持：{mem_stats['unsupported']:<4}{'':<15}║")
+    print(f"║  🔥 Scientific Conflicts Identified: {mem_stats['conflicts']:<20}║")
+    print(f"║  🔎 写作前建议：python scripts/evidence_memory.py {slug} query <topic>{'':<3}║")
     print(f"║  🔁 改进循环：{str(improvement_cnt)[:36]:<44}║")
     print(f"║  🎯 检查点模式：{cp_mode:<43}║")
 

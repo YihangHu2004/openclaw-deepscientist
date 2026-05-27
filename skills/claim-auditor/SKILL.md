@@ -12,6 +12,8 @@
 
 ## 审计流程（5 步）
 
+开始审计前先运行 `python scripts/evidence_memory.py <slug> query "<topic>" --top-k 5`，快速定位高频使用证据；审计仍以 `evidence.json` 为准。
+
 ### Step 1：抽样
 
 从 evidence.json 中按优先级抽取：

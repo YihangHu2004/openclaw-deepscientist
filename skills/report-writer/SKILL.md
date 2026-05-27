@@ -8,6 +8,8 @@
 
 ## 写作前证据预审（Sprint Contract）
 
+先运行 `python scripts/evidence_memory.py <slug> query "<topic>" --top-k 5`，确认核心主题已有可用 EV；默认不使用 `unsupported` EV。
+
 **先写预承诺评分标准，再动笔（预承诺后不得修改标准）**：
 ```markdown
 ## 报告质量预承诺 · {日期}
