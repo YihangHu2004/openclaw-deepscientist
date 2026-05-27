@@ -3,12 +3,16 @@
 import { useState, useCallback } from 'react';
 import { ProjectMeta } from '@/lib/api';
 
-const STATUS: Record<string, { color: string; bg: string; border: string; label: string }> = {
-  planning: { color: '#fbbf24', bg: 'rgba(251,191,36,0.1)',  border: 'rgba(251,191,36,0.25)', label: 'Planning' },
-  active:   { color: '#34d399', bg: 'rgba(52,211,153,0.1)',  border: 'rgba(52,211,153,0.25)',  label: 'Active'   },
-  complete: { color: '#818cf8', bg: 'rgba(129,140,248,0.1)', border: 'rgba(129,140,248,0.25)', label: 'Done'     },
-  done:     { color: '#818cf8', bg: 'rgba(129,140,248,0.1)', border: 'rgba(129,140,248,0.25)', label: 'Done'     },
-};
+function statusPill(s: string | undefined) {
+  if (!s || s.toLowerCase() === 'unknown') {
+    return { color: '#888', bg: 'rgba(100,100,100,0.08)', border: 'rgba(100,100,100,0.2)', label: 'Unknown' };
+  }
+  const v = s.toLowerCase();
+  if (v.startsWith('done') || v.startsWith('complete')) {
+    return { color: '#818cf8', bg: 'rgba(129,140,248,0.1)', border: 'rgba(129,140,248,0.25)', label: 'Done' };
+  }
+  return { color: '#fbbf24', bg: 'rgba(251,191,36,0.1)', border: 'rgba(251,191,36,0.25)', label: 'In Progress' };
+}
 
 function fmt(ms: number) {
   const diff = Date.now() - ms;
@@ -19,29 +23,59 @@ function fmt(ms: number) {
 }
 
 interface Props {
-  project: ProjectMeta;
-  index:   number;
-  onClick: () => void;
+  project:  ProjectMeta;
+  index:    number;
+  onClick:  () => void;
+  onDelete?: (slug: string) => Promise<void>;
 }
 
-export default function ProjectCard({ project, index, onClick }: Props) {
-  const [jolting, setJolting] = useState(false);
-  const st = STATUS[project.status?.toLowerCase()] ?? {
-    color: '#666', bg: 'rgba(100,100,100,0.08)', border: 'rgba(100,100,100,0.2)', label: 'Unknown',
-  };
+export default function ProjectCard({ project, index, onClick, onDelete }: Props) {
+  const [jolting,    setJolting]    = useState(false);
+  const [hovered,   setHovered]    = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [deleting,  setDeleting]   = useState(false);
+  const st = statusPill(project.status);
 
   const handleClick = useCallback(() => {
+    if (confirming) return;
     if ('vibrate' in navigator) navigator.vibrate(20);
     setJolting(true);
     const t = setTimeout(() => { setJolting(false); onClick(); }, 380);
     return () => clearTimeout(t);
-  }, [onClick]);
+  }, [onClick, confirming]);
+
+  const handleDeleteClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setConfirming(true);
+  }, []);
+
+  const handleCancelDelete = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setConfirming(false);
+  }, []);
+
+  const handleConfirmDelete = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!onDelete || deleting) return;
+    setDeleting(true);
+    try {
+      await onDelete(project.slug);
+    } catch {
+      setDeleting(false);
+      setConfirming(false);
+    }
+  }, [onDelete, project.slug, deleting]);
 
   return (
-    <button
+    <div
+      role="button"
+      tabIndex={0}
       onClick={handleClick}
-      className={`dc-project-card card-enter w-full text-left${jolting ? ' card-jolt' : ''}`}
-      style={{ animationDelay: `${Math.min(index * 50, 320)}ms`, outline: 'none' }}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') handleClick(); }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => { setHovered(false); if (!deleting) setConfirming(false); }}
+      className={`dc-project-card card-enter w-full text-left${jolting ? ' card-jolt' : ''}${deleting ? ' card-deleting' : ''}`}
+      style={{ animationDelay: `${Math.min(index * 50, 320)}ms`, outline: 'none', position: 'relative', cursor: 'pointer' }}
     >
       <div style={{
         display: 'flex',
@@ -107,7 +141,7 @@ export default function ProjectCard({ project, index, onClick }: Props) {
           )}
         </div>
 
-        {/* Meta */}
+        {/* Meta + delete area */}
         <div style={{
           display: 'flex',
           flexDirection: 'column',
@@ -116,36 +150,111 @@ export default function ProjectCard({ project, index, onClick }: Props) {
           flexShrink: 0,
           minWidth: 96,
         }}>
-          {/* Status pill */}
-          <span className="dc-status-chip" style={{
-            fontSize: 9,
-            fontFamily: 'var(--font-mono)',
-            fontWeight: 600,
-            letterSpacing: '0.1em',
-            padding: '3px 10px',
-            background: st.bg,
-            color: st.color,
-            border: `1px solid ${st.border}`,
-            textTransform: 'uppercase',
-          }}>
-            {st.label}
-          </span>
+          {confirming ? (
+            /* Inline delete confirmation */
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                 onClick={e => e.stopPropagation()}>
+              <span style={{
+                fontSize: 9, fontFamily: 'var(--font-mono)',
+                color: '#fb7185', letterSpacing: '0.08em',
+                textTransform: 'uppercase', whiteSpace: 'nowrap',
+              }}>
+                {deleting ? '删除中…' : '确认删除?'}
+              </span>
+              {!deleting && <>
+                <button
+                  onClick={handleConfirmDelete}
+                  style={{
+                    padding: '2px 8px', borderRadius: 5, fontSize: 9,
+                    border: '1px solid rgba(251,113,133,0.4)',
+                    background: 'rgba(251,113,133,0.1)',
+                    color: '#fb7185', fontFamily: 'var(--font-mono)',
+                    cursor: 'pointer', letterSpacing: '0.06em',
+                  }}
+                >
+                  删除
+                </button>
+                <button
+                  onClick={handleCancelDelete}
+                  style={{
+                    padding: '2px 8px', borderRadius: 5, fontSize: 9,
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    background: 'transparent',
+                    color: 'var(--text-muted)', fontFamily: 'var(--font-mono)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  取消
+                </button>
+              </>}
+            </div>
+          ) : (
+            <>
+              {/* Status pill */}
+              <span className="dc-status-chip" style={{
+                fontSize: 9,
+                fontFamily: 'var(--font-mono)',
+                fontWeight: 600,
+                letterSpacing: '0.1em',
+                padding: '3px 10px',
+                background: st.bg,
+                color: st.color,
+                border: `1px solid ${st.border}`,
+                textTransform: 'uppercase',
+              }}>
+                {st.label}
+              </span>
 
-          {/* Session + time */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-            <div className="dc-project-session">
-              <span
-                className={project.sessionKey ? 'dc-session-dot dc-breathing' : 'dc-session-dot'}
-                style={{ '--dot-color': project.sessionKey ? '#34d399' : '#333' } as React.CSSProperties}
-              />
-              {project.sessionKey ? 'Live' : 'Idle'}
-            </div>
-            <div className="dc-project-time">
-              {project.updatedAt ? fmt(project.updatedAt) : '—'}
-            </div>
-          </div>
+              {/* Session + time */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                <div className="dc-project-session">
+                  <span
+                    className={project.sessionKey ? 'dc-session-dot dc-breathing' : 'dc-session-dot'}
+                    style={{ '--dot-color': project.sessionKey ? '#34d399' : '#333' } as React.CSSProperties}
+                  />
+                  {project.sessionKey ? 'Live' : 'Offline'}
+                </div>
+                <div className="dc-project-time">
+                  {project.updatedAt ? fmt(project.updatedAt) : '—'}
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
-    </button>
+
+      {/* Delete trigger — appears on hover, top-right corner */}
+      {onDelete && !confirming && !deleting && (hovered || confirming) && (
+        <button
+          onClick={handleDeleteClick}
+          style={{
+            position: 'absolute', top: 8, right: 8,
+            width: 22, height: 22,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: 'rgba(251,113,133,0.08)',
+            border: '1px solid rgba(251,113,133,0.2)',
+            borderRadius: 6,
+            color: '#fb7185',
+            cursor: 'pointer',
+            opacity: hovered ? 1 : 0,
+            transition: 'opacity 150ms',
+            fontSize: 12,
+          }}
+          title="删除项目"
+        >
+          <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+            <path d="M2 3h7M4.5 3V2h2v1M4 3l.5 6M7 3l-.5 6" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </button>
+      )}
+
+      <style>{`
+        .card-deleting {
+          opacity: 0.4;
+          pointer-events: none;
+          transition: opacity 300ms;
+        }
+      `}</style>
+    </div>
   );
 }

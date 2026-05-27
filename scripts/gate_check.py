@@ -56,6 +56,30 @@ def read_text(path: Path) -> str:
         return ""
 
 
+# ── Text length helper ────────────────────────────────────────────────────────
+
+# CJK Unified Ideographs + Extension A/B + Compatibility
+_CJK_PAT = re.compile(
+    r"[一-鿿㐀-䶿\U00020000-\U0002a6df"
+    r"぀-ヿ가-힯]"
+)
+
+def count_length(text: str) -> tuple[int, str]:
+    """Return (length, unit) where unit is '字' for CJK-dominant text or '词' for Latin.
+
+    Mixed text: CJK characters + Latin words are summed.
+    Thresholds in gate checks are expressed in this unified unit.
+    A Chinese report with 1000 '字' is roughly equivalent to a 600-word English report,
+    so gate thresholds for Chinese are set ~1.5× the English ones.
+    """
+    cjk_chars = len(_CJK_PAT.findall(text))
+    # Remove CJK chars, then count remaining whitespace-separated tokens
+    latin_words = len(_CJK_PAT.sub(" ", text).split())
+    if cjk_chars > latin_words:          # CJK-dominant
+        return cjk_chars + latin_words, "字"
+    return latin_words, "词"             # Latin-dominant
+
+
 # ── Gate implementations ───────────────────────────────────────────────────────
 
 def gate_1_2(proj_dir: Path, verbose: bool):
@@ -124,6 +148,7 @@ def gate_3(proj_dir: Path, verbose: bool):
         blockers.append(f"EV 记录不足（当前 {ev_count} 条，需 ≥10）")
 
     abstract_count = sum(1 for ev in items if ev.get("source_type") == "abstract_only")
+    # full_text / truncated_full_text / map_reduce_full_text 均视为非摘要来源
     abstract_ratio = abstract_count / ev_count if ev_count > 0 else 1.0
     c2 = abstract_ratio <= 0.30
     conditions.append({"name": "全文来源比例", "required": "abstract_only ≤30%",
@@ -160,12 +185,13 @@ def gate_4(proj_dir: Path, verbose: bool):
     # Extract 综述草稿 section
     m = re.search(r"##\s+综述草稿.*?\n(.*?)(?=\n##\s|\Z)", project_text, re.DOTALL)
     rw_text = m.group(1).strip() if m else ""
-    rw_words = len(rw_text.split())
-    c1 = rw_words >= 200
-    conditions.append({"name": "综述字数", "required": "≥200 词",
-                       "actual": f"{rw_words} 词", "passed": c1})
+    rw_len, rw_unit = count_length(rw_text)
+    rw_min = 300 if rw_unit == "字" else 200
+    c1 = rw_len >= rw_min
+    conditions.append({"name": "综述字数", "required": f"≥{rw_min} {rw_unit}",
+                       "actual": f"{rw_len} {rw_unit}", "passed": c1})
     if not c1:
-        blockers.append(f"综述字数不足（{rw_words} 词，需 ≥200）")
+        blockers.append(f"综述字数不足（{rw_len} {rw_unit}，需 ≥{rw_min}）")
 
     ev_refs = len(re.findall(r"\[EV-\d+\]", project_text))
     c2 = ev_refs >= 3
@@ -237,6 +263,22 @@ def gate_5(proj_dir: Path, verbose: bool):
     return c1 and c2 and c3, conditions, blockers
 
 
+def _extract_section(text: str, header_pat: str) -> str:
+    """Extract text of a single section (until next same-or-higher-level heading)."""
+    m = re.search(header_pat, text, re.IGNORECASE)
+    if not m:
+        return ""
+    start = m.end()
+    # Find next heading of same or higher level
+    next_h = re.search(r"\n#+\s", text[start:])
+    end = start + next_h.start() if next_h else len(text)
+    return text[start:end]
+
+
+def _ev_count_in(text: str) -> int:
+    return len(re.findall(r"\[EV-\d+\]", text))
+
+
 def gate_6(proj_dir: Path, verbose: bool):
     conditions, blockers = [], []
 
@@ -246,11 +288,11 @@ def gate_6(proj_dir: Path, verbose: bool):
     REQUIRED_SECTIONS = [
         ("摘要",     r"#+\s+(摘要|Abstract)"),
         ("引言",     r"#+\s+(引言|简介|研究背景|Introduction)"),
-        ("相关工作", r"#+\s+(相关工作|文献综述|Related Work)"),
-        ("研究空白", r"#+\s+(研究空白|研究动机|Gap|Research Gap|Motivation)"),
-        ("研究方法", r"#+\s+(研究方法|方法论|方案|Methodology|Proposed Method)"),
-        ("实验设计", r"#+\s+(实验设计|实验方案|Experiment|Experimental)"),
-        ("预期结果", r"#+\s+(预期结果|实验结果|结果分析|Result|Expected|Findings)"),
+        ("相关工作", r"#+\s+(相关工作|文献综述|Related\s*Work)"),
+        ("研究空白", r"#+\s+(研究空白|研究动机|Gap|Research\s*Gap|Motivation)"),
+        ("研究方法", r"#+\s+(研究方法|方法论|方案|Methodology|Proposed\s*Method)"),
+        ("实验设计", r"#+\s+(实验设计|实验方案|Experiment(?:al\s*Design)?)"),
+        ("预期结果", r"#+\s+(预期结果|实验结果|结果分析|Expected\s*Results?|Findings)"),
         ("参考文献", r"#+\s+(参考文献|References)"),
     ]
     found = [(name, bool(re.search(pat, text, re.IGNORECASE)))
@@ -263,12 +305,36 @@ def gate_6(proj_dir: Path, verbose: bool):
         missing = [name for name, ok in found if not ok]
         blockers.append(f"缺少章节：{', '.join(missing)}")
 
-    word_count = len(text.split())
-    c2 = word_count >= 1000
-    conditions.append({"name": "报告字数", "required": "≥1000 词",
-                       "actual": f"{word_count} 词", "passed": c2})
+    # Per-section EV minimums
+    SEC_EV_MIN = [
+        ("研究空白",  r"#+\s+(研究空白|研究动机|Gap|Research\s*Gap|Motivation)",     2),
+        ("研究方法",  r"#+\s+(研究方法|方法论|方案|Methodology|Proposed\s*Method)",  4),
+        ("实验设计",  r"#+\s+(实验设计|实验方案|Experiment(?:al\s*Design)?)",         3),
+        ("预期结果",  r"#+\s+(预期结果|实验结果|结果分析|Expected\s*Results?|Findings)", 3),
+    ]
+    sec_ev_pass = True
+    for sec_name, sec_pat, min_ev in SEC_EV_MIN:
+        sec_text = _extract_section(text, sec_pat)
+        ev_n = _ev_count_in(sec_text)
+        ok = ev_n >= min_ev
+        if not ok:
+            sec_ev_pass = False
+        conditions.append({
+            "name": f"EV 计数·{sec_name}",
+            "required": f"≥{min_ev} 条",
+            "actual": f"{ev_n} 条",
+            "passed": ok,
+        })
+        if not ok:
+            blockers.append(f"{sec_name} 章节 EV 不足（{ev_n} 条，需 ≥{min_ev}）")
+
+    doc_len, doc_unit = count_length(text)
+    doc_min = 1500 if doc_unit == "字" else 1000
+    c2 = doc_len >= doc_min
+    conditions.append({"name": "报告字数", "required": f"≥{doc_min} {doc_unit}",
+                       "actual": f"{doc_len} {doc_unit}", "passed": c2})
     if not c2:
-        blockers.append(f"报告字数不足（{word_count} 词，需 ≥1000）")
+        blockers.append(f"报告字数不足（{doc_len} {doc_unit}，需 ≥{doc_min}）")
 
     # EV coverage: sentences with literature claim signals.
     # Percentages only count when co-occurring with a performance/comparison verb
@@ -307,7 +373,7 @@ def gate_6(proj_dir: Path, verbose: bool):
     if not html_exists:
         blockers.append("report.html 不存在，需运行 HTML 生成脚本")
 
-    return c1 and c2 and c3 and c4 and html_exists, conditions, blockers
+    return c1 and sec_ev_pass and c2 and c3 and c4 and html_exists, conditions, blockers
 
 
 def gate_7(proj_dir: Path, verbose: bool):

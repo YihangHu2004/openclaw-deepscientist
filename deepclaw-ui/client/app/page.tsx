@@ -70,10 +70,10 @@ export default function LandingPage() {
     type FloatWord={ x:number; y:number; tx:number; ty:number; text:string; size:number; rotate:number; color:string; phase:'fly'|'hold'|'fade'; holdTimer:number; fadeAlpha:number; trail:{x:number;y:number}[] };
     type Optimum = { x:number; y:number; radius:number; maxRadius:number; opacity:number; color:string } | null;
 
-    let citNodes:  CitNode[]   = [];
-    let convPs:    ConvP[]     = [];
-    let specBands: SpecBand[]  = [];
-    let floatWords:FloatWord[] = [];
+    const citNodes:  CitNode[]   = [];
+    const convPs:    ConvP[]     = [];
+    const specBands: SpecBand[]  = [];
+    const floatWords:FloatWord[] = [];
     let optimum:   Optimum     = null;
 
     // ── click blast trigger (called from React, executed in canvas) ───────
@@ -167,10 +167,6 @@ export default function LandingPage() {
       mouse.dampedX += (mouse.canvasX - mouse.dampedX) * 0.15;
       mouse.dampedY += (mouse.canvasY - mouse.dampedY) * 0.15;
 
-      // radar scan
-      const scanY = (Date.now() / 25) % (H * 1.5);
-      ctx.fillStyle = lh ? 'rgba(217,70,239,0.004)' : 'rgba(16,185,129,0.005)';
-      ctx.fillRect(0, scanY - 60, W, 120);
 
       // ── effect 1: citation topology ──────────────────────────────────────
       for (let i = citNodes.length - 1; i >= 0; i--) {
@@ -185,7 +181,6 @@ export default function LandingPage() {
         ctx.strokeStyle = `rgba(16,185,129,${0.35 * n.alpha})`; ctx.lineWidth = 0.8; ctx.setLineDash([2,5]); ctx.stroke();
         citNodes.forEach(o => { if (o === n) return; ctx.beginPath(); ctx.moveTo(n.currX, n.currY); ctx.lineTo(o.currX, o.currY); ctx.strokeStyle = `rgba(6,182,212,${0.12 * n.alpha})`; ctx.lineWidth = 0.6; ctx.setLineDash([]); ctx.stroke(); });
         ctx.beginPath(); ctx.arc(n.currX, n.currY, 3, 0, Math.PI * 2); ctx.fillStyle = n.color; ctx.shadowBlur = 6; ctx.shadowColor = n.color; ctx.fill();
-        ctx.font = 'bold 9px monospace'; ctx.fillStyle = '#f1f5f9'; ctx.fillText(n.label, n.currX + 8, n.currY + 3);
         ctx.restore();
       }
 
@@ -218,8 +213,6 @@ export default function LandingPage() {
           ctx.moveTo(optimum.x, optimum.y - optimum.radius - 15); ctx.lineTo(optimum.x, optimum.y - optimum.radius + 5);
           ctx.moveTo(optimum.x, optimum.y + optimum.radius - 5); ctx.lineTo(optimum.x, optimum.y + optimum.radius + 15);
           ctx.stroke();
-          ctx.font = 'bold 9px monospace'; ctx.fillStyle = '#22d3ee';
-          ctx.fillText('GLOBAL_OPTIMUM_FOUND //', optimum.x + 12, optimum.y - optimum.radius - 8);
           ctx.restore();
         }
       }
@@ -232,8 +225,6 @@ export default function LandingPage() {
         ctx.save(); ctx.globalAlpha = b.opacity;
         ctx.beginPath(); ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
         ctx.strokeStyle = b.color; ctx.lineWidth = 1.2; ctx.shadowBlur = 8; ctx.shadowColor = b.color; ctx.stroke();
-        ctx.font = 'bold 8px monospace'; ctx.fillStyle = b.color;
-        ctx.fillText(b.label, b.x + Math.cos(Math.PI/4)*b.radius + 4, b.y + Math.sin(Math.PI/4)*b.radius + 4);
         ctx.restore();
       }
 
@@ -393,7 +384,7 @@ export default function LandingPage() {
           <LobsterLogo size={24} />
           <span className="dc-text-shimmer" style={{ fontFamily: 'var(--font-brand)', fontSize: 14, fontWeight: 800, letterSpacing: '0.22em', textTransform: 'uppercase' }}>DeepClaw</span>
         </div>
-        <button className="dc-glare-btn is-secondary" onClick={() => { showToast('TRANSMITTING // NAVIGATING TO: /PROJECTS'); router.push('/projects'); }} style={{ padding: '8px 16px', fontSize: 12, borderRadius: 8 }}>PROJECTS //</button>
+        <button className="dc-glare-btn is-secondary" onClick={() => { showToast('TRANSMITTING // NAVIGATING TO: /PROJECTS'); router.push('/projects'); }} style={{ padding: '8px 16px', fontSize: 12, borderRadius: 8 }}>项目库 //</button>
       </header>
 
       {/* Hero */}
@@ -428,20 +419,20 @@ export default function LandingPage() {
 
         <h1 className="dc-text-shimmer" style={{ fontFamily: 'var(--font-brand)', fontSize: 'clamp(44px,7.5vw,88px)', fontWeight: 800, letterSpacing: '0.24em', textTransform: 'uppercase', lineHeight: 0.95, margin: '0 0 16px', paddingLeft: '0.24em', cursor: 'pointer' }}>DeepClaw</h1>
 
-        <div style={{ fontFamily: 'monospace', fontSize: 'clamp(10px,1.3vw,12px)', letterSpacing: '0.42em', color: '#10b981', textTransform: 'uppercase', marginBottom: 24, opacity: 0.9, fontWeight: 600, paddingLeft: '0.42em', textShadow: '0 0 15px rgba(16,185,129,0.4)' }}>Autonomous Research Studio</div>
+        <div style={{ fontFamily: 'monospace', fontSize: 'clamp(11px,1.3vw,13px)', letterSpacing: '0.28em', color: '#10b981', marginBottom: 24, opacity: 0.9, fontWeight: 600, textShadow: '0 0 15px rgba(16,185,129,0.4)' }}>深度科研助手</div>
 
         <div style={{ width: 120, height: 1, marginBottom: 28, background: 'linear-gradient(90deg, transparent, rgba(16,185,129,0.6), transparent)' }} />
 
-        <p style={{ maxWidth: 540, fontSize: 'clamp(12px,1.4vw,14px)', lineHeight: 1.8, color: '#94a3b8', fontFamily: 'var(--font-ui)', margin: '0 0 44px', letterSpacing: '0.015em' }}>
-          AI-driven research workflows — literature review, experiment execution and paper writing, all in one place. Start a project and let the agent handle the rest.
+        <p style={{ maxWidth: 540, fontSize: 'clamp(12px,1.4vw,14px)', lineHeight: 1.9, color: '#94a3b8', fontFamily: 'var(--font-ui)', margin: '0 0 44px', letterSpacing: '0.02em' }}>
+          AI 驱动的全流程科研工作台——文献检索、实验执行、论文写作，一站完成。提出你的研究问题，让 agent 接管剩下的事。
         </p>
 
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center', zIndex: 10 }}>
           <button className="dc-glare-btn is-primary" onClick={() => setOpen(true)}>
-            <span style={{ position: 'relative', zIndex: 1 }}>Launch New Project</span>
+            <span style={{ position: 'relative', zIndex: 1 }}>开启研究</span>
           </button>
           <button className="dc-glare-btn is-secondary" onClick={() => { showToast('TRANSMITTING // NAVIGATING TO: /PROJECTS'); router.push('/projects'); }}>
-            <span style={{ position: 'relative', zIndex: 1 }}>View Projects →</span>
+            <span style={{ position: 'relative', zIndex: 1 }}>查看项目 →</span>
           </button>
         </div>
       </main>

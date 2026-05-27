@@ -11,6 +11,9 @@ Exit code: 0 on success, 1 on error.
 """
 import argparse
 import json
+import os
+import shutil
+import subprocess
 import sys
 sys.stdout.reconfigure(encoding="utf-8")
 sys.stderr.reconfigure(encoding="utf-8")
@@ -20,6 +23,25 @@ from pathlib import Path
 WORKSPACE = Path(__file__).parent.parent
 STATE_DIR  = WORKSPACE / "state" / "projects"
 GLOBAL_STATE = WORKSPACE / "state"
+SCRIPTS_DIR = WORKSPACE / "scripts"
+
+
+def deploy_hard_stop(slug: str, reason: str = "") -> None:
+    """Deploy the hard-stop lock file."""
+    lock_path = WORKSPACE / ".hard_stop_init"
+    payload = {
+        "slug": slug,
+        "reason": reason or "初始化进行中",
+        "timestamp": now_iso(),
+    }
+    lock_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def release_hard_stop() -> None:
+    """Remove the hard-stop lock file."""
+    lock_path = WORKSPACE / ".hard_stop_init"
+    if lock_path.exists():
+        lock_path.unlink()
 
 STAGE_NAMES = {
     1: "arxiv-search",
@@ -42,16 +64,36 @@ def write_json(path: Path, data: dict) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def init_project(slug: str, mode: str) -> None:
+def init_project(slug: str, mode: str, papers: list[str] | None = None) -> None:
     proj_dir = STATE_DIR / slug
+    papers = papers or []
 
     if proj_dir.exists():
         print(f"⚠️  项目已存在：{proj_dir}")
         print("   如需重新初始化，请先备份并删除该目录。")
         sys.exit(1)
 
+    # Deploy HARD STOP lock BEFORE any file creation
+    deploy_hard_stop(slug, "初始化进行中 — 禁止提前产出的内容")
+    print("🔒 HARD STOP 已部署: 完成初始化前禁止任何研究产出")
+
     proj_dir.mkdir(parents=True)
     (proj_dir / "slides").mkdir()
+
+    # ── papers/ directory ─────────────────────────────────────────────────────
+    papers_dir = proj_dir / "papers"
+    papers_dir.mkdir()
+    copied = 0
+    for pdf_path_str in papers:
+        src = Path(pdf_path_str)
+        if src.exists() and src.suffix.lower() == ".pdf":
+            shutil.copy2(str(src), str(papers_dir / src.name))
+            print(f"   📄 已复制 PDF: {src.name}")
+            copied += 1
+        else:
+            print(f"   ⚠️  跳过（不存在或非 PDF）: {pdf_path_str}")
+    if copied:
+        print(f"   ✅ 共复制 {copied} 篇 PDF 到 papers/")
 
     # ── pipeline_state.json ───────────────────────────────────────────────────
     pipeline_state = {
@@ -165,8 +207,12 @@ def init_project(slug: str, mode: str) -> None:
         })
         print("✅ 已初始化 state/baselines.json")
 
+    # Release HARD STOP lock after successful init
+    release_hard_stop()
+
     # ── Summary ───────────────────────────────────────────────────────────────
     print(f"\n✅ 项目 [{slug}] 初始化完成")
+    print(f"🔓 HARD STOP 已解除: 可以开始研究")
     print(f"   模式：{mode}")
     print(f"   目录：{proj_dir}\n")
     print("📁 已创建文件：")
@@ -188,8 +234,14 @@ def main() -> None:
         default="INTERACTIVE",
         help="流水线运行模式（默认 INTERACTIVE）",
     )
+    parser.add_argument(
+        "--papers",
+        nargs="*",
+        default=[],
+        help="PDF 路径列表，复制到 papers/ 目录",
+    )
     args = parser.parse_args()
-    init_project(args.slug, args.mode)
+    init_project(args.slug, args.mode, args.papers)
 
 
 if __name__ == "__main__":

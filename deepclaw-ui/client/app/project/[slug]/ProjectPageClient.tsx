@@ -60,11 +60,17 @@ export default function ProjectPageClient() {
   const searchParams  = useSearchParams();
   const initMessage   = searchParams.get('init') ?? undefined;
 
-  const [project, setProject]     = useState<ProjectMeta | null>(null);
-  const [sessions, setSessions]   = useState<SessionMeta[]>([]);
-  const [loading, setLoading]     = useState(true);
-  const [showLink, setShowLink]   = useState(false);
-  const [panelMode, setPanelMode] = useState<PanelMode>('split');
+  const [project, setProject]         = useState<ProjectMeta | null>(null);
+  const [sessions, setSessions]       = useState<SessionMeta[]>([]);
+  const [loading, setLoading]         = useState(true);
+  const [showLink, setShowLink]       = useState(false);
+  const [panelMode, setPanelMode]     = useState<PanelMode>('split');
+  const [htmlPreview, setHtmlPreview] = useState<string | null>(null);
+
+  const handleHtmlPreview = useCallback((html: string) => {
+    setHtmlPreview(html);
+    setPanelMode(m => m === 'split' ? 'preview' : m);
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -78,6 +84,7 @@ export default function ProjectPageClient() {
     finally { setLoading(false); }
   }, [slug]);
 
+   
   useEffect(() => { load(); }, [load]);
 
   const handleBind = async (sessionKey: string) => {
@@ -193,17 +200,21 @@ export default function ProjectPageClient() {
             sessionKey={sessionKey}
             slug={slug}
             initialMessage={initMessage}
+            compact={panelMode !== 'split'}
             onSessionCreated={handleSessionCreated}
+            onHtmlPreview={handleHtmlPreview}
           />
         </div>
         <div className="flex-1 overflow-hidden" style={{ minWidth: 0 }}>
           <WorkPanel
             slug={slug}
             mode={panelMode}
+            htmlPreview={htmlPreview}
             onFileOpen={() => { if (panelMode === 'split') setPanelMode('preview'); }}
             onExpand={() => setPanelMode('full')}
             onCollapse={() => setPanelMode('preview')}
             onClosePreview={() => setPanelMode('split')}
+            onClearHtmlPreview={() => { setHtmlPreview(null); setPanelMode('split'); }}
           />
         </div>
       </div>

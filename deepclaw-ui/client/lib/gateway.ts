@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 
 const SERVER_BASE = process.env.NEXT_PUBLIC_SERVER_URL || 'http://127.0.0.1:19000';
 const WS_URL      = SERVER_BASE.replace(/^http/, 'ws') + '/ws/gateway';
@@ -30,21 +30,27 @@ export interface ChatMessage {
 }
 
 interface UseGatewayOptions {
-  sessionId:  string | null;  // UUID (for display)
-  sessionKey: string | null;  // full key for sessions.send
+  sessionId:  string | null;
+  sessionKey: string | null;
   onMessage?: (msg: ChatMessage) => void;
 }
 
 // ─── useGateway hook ──────────────────────────────────────────────────────────
 
 export function useGateway({ sessionId, sessionKey, onMessage }: UseGatewayOptions) {
-  const [status, setStatus]             = useState<GatewayStatus>('disconnected');
+  const [status, setStatus]               = useState<GatewayStatus>('disconnected');
   const [streamingText, setStreamingText] = useState('');
-  const wsRef       = useRef<WebSocket | null>(null);
-  const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const mountedRef  = useRef(true);
-  const sessionRef  = useRef(sessionId);
-  const sessionKeyRef = useRef(sessionKey);
+  const [isGenerating, setIsGenerating]   = useState(false);
+  const [agentActivity, setAgentActivity] = useState<string | null>(null);
+
+  const wsRef            = useRef<WebSocket | null>(null);
+  const reconnectRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mountedRef       = useRef(true);
+  const sessionRef       = useRef(sessionId);
+  const sessionKeyRef    = useRef(sessionKey);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const eventHandlerRef  = useRef<(msg: any) => void>(() => {});
+  const connectRef       = useRef<() => void>(() => {});
 
   useEffect(() => { sessionRef.current = sessionId; }, [sessionId]);
   useEffect(() => { sessionKeyRef.current = sessionKey; }, [sessionKey]);
@@ -59,7 +65,7 @@ export function useGateway({ sessionId, sessionKey, onMessage }: UseGatewayOptio
     wsRef.current = ws;
 
     ws.onopen = () => {
-      // wait for proxy 'connected' event from server before marking ready
+      // wait for proxy 'connected' event from server
     };
 
     ws.onmessage = (ev) => {
@@ -67,42 +73,31 @@ export function useGateway({ sessionId, sessionKey, onMessage }: UseGatewayOptio
       try {
         const msg = JSON.parse(ev.data);
 
-        // Proxy lifecycle
         if (msg.type === 'proxy') {
-          if (msg.event === 'connected') {
-            setStatus('connected');
-          } else if (msg.event === 'disconnected' || msg.event === 'error') {
-            setStatus('error');
-          }
+          if (msg.event === 'connected') setStatus('connected');
+          else if (msg.event === 'disconnected' || msg.event === 'error') setStatus('error');
           return;
         }
 
-        // Gateway events
-        if (msg.type === 'event') {
-          handleGatewayEvent(msg);
-        }
+        if (msg.type === 'event') eventHandlerRef.current(msg);
       } catch { /* ignore non-JSON */ }
     };
 
-    ws.onerror = () => {
-      if (!mountedRef.current) return;
-      setStatus('error');
-    };
+    ws.onerror = () => { if (mountedRef.current) setStatus('error'); };
 
     ws.onclose = () => {
       if (!mountedRef.current) return;
       setStatus('disconnected');
+      setIsGenerating(false);
+      setAgentActivity(null);
       wsRef.current = null;
-      // Auto-reconnect after 3s
       if (reconnectRef.current) clearTimeout(reconnectRef.current);
       reconnectRef.current = setTimeout(() => {
-        if (mountedRef.current) connect();
+        if (mountedRef.current) connectRef.current();
       }, 3000);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Partial streaming message accumulator
   const streamRef = useRef<ChatMessage | null>(null);
 
   const handleGatewayEvent = useCallback((msg: {
@@ -112,9 +107,35 @@ export function useGateway({ sessionId, sessionKey, onMessage }: UseGatewayOptio
   }) => {
     const { event, payload } = msg;
 
-    // chat event: streaming delta or final message
+    // Agent activity events — extract current tool/state label
+    if (event === 'agent') {
+      const state = payload?.state ?? payload?.status ?? '';
+      const tool  = payload?.tool ?? payload?.name ?? payload?.toolName ?? null;
+      if (state === 'idle' || state === 'done' || state === 'complete') {
+        setAgentActivity(null);
+      } else if (tool) {
+        setAgentActivity(String(tool));
+      } else if (state) {
+        setAgentActivity(String(state));
+      }
+      return;
+    }
+
+    // session.operation — tool call in progress
+    if (event === 'session.operation') {
+      const op   = payload?.op ?? '';
+      const name = payload?.name ?? payload?.tool ?? null;
+      if (op === 'tool_call' || op === 'tool_start') {
+        setAgentActivity(name ? String(name) : 'tool call');
+      } else if (op === 'tool_end' || op === 'done') {
+        setAgentActivity(null);
+      }
+      return;
+    }
+
     if (event === 'chat') {
       if (payload?.state === 'delta' && payload?.deltaText) {
+        setIsGenerating(true);
         setStreamingText(prev => prev + payload.deltaText);
       } else if (payload?.state === 'final' && payload?.message) {
         const m = payload.message;
@@ -126,12 +147,13 @@ export function useGateway({ sessionId, sessionKey, onMessage }: UseGatewayOptio
         };
         streamRef.current = null;
         setStreamingText('');
+        setIsGenerating(false);
+        setAgentActivity(null);
         onMessage?.(chatMsg);
       }
       return;
     }
 
-    // Legacy session.message event
     if (event === 'session.message' && payload?.message) {
       const m = payload.message;
       const chatMsg: ChatMessage = {
@@ -142,10 +164,17 @@ export function useGateway({ sessionId, sessionKey, onMessage }: UseGatewayOptio
       };
       streamRef.current = null;
       setStreamingText('');
+      setIsGenerating(false);
+      setAgentActivity(null);
       onMessage?.(chatMsg);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onMessage]);
+
+  // Keep refs up-to-date so closures defined before don't go stale
+  useLayoutEffect(() => {
+    eventHandlerRef.current = handleGatewayEvent;
+    connectRef.current      = connect;
+  });
 
   useEffect(() => {
     connect();
@@ -161,6 +190,9 @@ export function useGateway({ sessionId, sessionKey, onMessage }: UseGatewayOptio
     const key = sessionKeyRef.current || sessionRef.current;
     if (!key) return false;
 
+    setIsGenerating(true);
+    setAgentActivity(null);
+
     const reqId = `send-${Date.now()}`;
     wsRef.current.send(JSON.stringify({
       type:   'req',
@@ -171,7 +203,25 @@ export function useGateway({ sessionId, sessionKey, onMessage }: UseGatewayOptio
     return true;
   }, []);
 
-  return { status, streamingText, sendMessage };
+  const sendInterrupt = useCallback(() => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return false;
+    const key = sessionKeyRef.current || sessionRef.current;
+    if (!key) return false;
+
+    const reqId = `interrupt-${Date.now()}`;
+    wsRef.current.send(JSON.stringify({
+      type:   'req',
+      id:     reqId,
+      method: 'sessions.interrupt',
+      params: { key },
+    }));
+    setIsGenerating(false);
+    setAgentActivity(null);
+    setStreamingText('');
+    return true;
+  }, []);
+
+  return { status, streamingText, isGenerating, agentActivity, sendMessage, sendInterrupt };
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

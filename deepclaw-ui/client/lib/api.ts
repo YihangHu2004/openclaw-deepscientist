@@ -65,6 +65,12 @@ export async function createProject(slug: string): Promise<{ ok: boolean; slug: 
   return data;
 }
 
+export async function deleteProject(slug: string): Promise<void> {
+  const res = await fetch(`${BASE}/api/projects/${encodeURIComponent(slug)}`, { method: 'DELETE' });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || `delete: ${res.status}`);
+}
+
 export async function bindProjectSession(slug: string, sessionKey: string): Promise<void> {
   const res = await fetch(`${BASE}/api/projects/${encodeURIComponent(slug)}/session`, {
     method: 'PUT',
@@ -120,6 +126,27 @@ export async function fetchProjectFileText(slug: string, filePath: string): Prom
   const res = await fetch(projectFileUrl(slug, filePath));
   if (!res.ok) throw new Error(`file: ${res.status}`);
   return res.text();
+}
+
+// ─── PDF upload ───────────────────────────────────────────────────────────────
+
+export interface UploadedPdf {
+  name: string;
+  path: string;
+  relativePath: string;
+}
+
+export async function uploadPdfs(files: File[]): Promise<UploadedPdf[]> {
+  const form = new FormData();
+  files.forEach(f => form.append('files', f));
+  const res = await fetch(`${BASE}/api/upload-pdfs`, { method: 'POST', body: form });
+  const text = await res.text();
+  let data: Record<string, unknown>;
+  try { data = JSON.parse(text); } catch {
+    throw new Error(`PDF 上传失败（服务器返回 ${res.status}）`);
+  }
+  if (!res.ok) throw new Error((data.error as string) || 'PDF 上传失败');
+  return (data.files as UploadedPdf[]);
 }
 
 // ─── Legacy workspace file browser (kept for compatibility) ───────────────────

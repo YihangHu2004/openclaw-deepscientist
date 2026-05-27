@@ -55,7 +55,17 @@ report.md §2 第 3 段："该模型准确率达 94.2% [EV-001]"
 
 证据覆盖率要求 ≥ 80%，否则报告验收门不通过。无法从文献验证的信息必须显式标注 `[MATERIAL GAP]`，禁止静默填充。
 
-**引用忠实度审计（S7，强制）**：抽样核查 claim_text 是否忠实于 original_text，判定为 faithful / drifted / unsupported，drifted 须给修改建议，unsupported 须修改正文。
+**引用忠实度审计（S7，强制）**：五层证据核查，全部由脚本强制执行：
+
+| 层 | 命令 | 作用 |
+|----|------|------|
+| 1. 冲突检测 | `ev_manager add` 自动触发 | 新 EV 录入时检测与已有 EV 的 Contradict 关系 |
+| 2. 覆盖率 | `ev_manager coverage` | 文献结论句中有 `[EV-xxx]` 的比例 ≥ 80% |
+| 3. 忠实度 | `ev_manager audit` | `claim_text` 是否忠实于 `original_text`（faithful / drifted / unsupported） |
+| 4. 句-原文匹配 | `ev_manager verify-report` | report.md 实际句子回写 `report_sentence`，检出幽灵 EV 和空 claim |
+| 5. 假设三色核查 | `ev_manager mark-hypothesis` + `check-hypothesis` | 假设章节每条 EV 标 🟢/🟡/🔴，有误句自动替换并同步写回 evidence.json |
+
+🟡/🔴 的原始错误句保存在 `hypothesis_audit.original_*` 字段（永不覆盖），修正后的内容更新到 `claim_text` / `report_sentence` / `audit_result`。
 
 **双流同行评审（S8，强制）**：4 位标准评审（主题专家 / 方法专家 / 写作审稿人 / 领域外视角）独立评分，加上 Devil's Advocate 主动寻找逻辑漏洞与竞争性解释。DA-CRITICAL 项阻断评审门。
 
@@ -80,7 +90,8 @@ report.md §2 第 3 段："该模型准确率达 94.2% [EV-001]"
 scripts/
 ├── init_project.py        # 初始化项目文件结构（新项目必须通过此脚本启动）
 ├── gate_check.py          # 计算门控条件，PASS/FAIL 写入 pipeline_state.json
-├── ev_manager.py          # 管理 evidence.json（增/查/覆盖率/gap 统计）
+├── ev_manager.py          # 管理 evidence.json（全部证据检查命令，见下）
+├── evidence_memory.py     # 构建可查询证据缓存，检测 Contradict 冲突关系
 ├── passport.py            # SHA256 内容哈希 + 物料护照验证（跨会话完整性）
 ├── session_restore.py     # 跨会话状态恢复卡片
 ├── init_outreach.py       # 初始化套磁项目目录结构
@@ -89,22 +100,39 @@ scripts/
 └── linkedin_scraper.py    # Bright Data LinkedIn API 封装（无 Token 时优雅跳过）
 ```
 
+**ev_manager.py 命令速查**：
+
 ```bash
-# 新项目启动
-python scripts/init_project.py my-project --mode INTERACTIVE
+# ── 录入与查询 ──────────────────────────────────────────────────────────────
+python scripts/ev_manager.py <slug> add \
+  --paper-id 2310.08560 --original "原文..." --confidence high
+python scripts/ev_manager.py <slug> list
 
-# 每阶段结束后（示例：S3 精读完成后）
-python scripts/passport.py my-project sign state/projects/my-project/project.md 3
-python scripts/gate_check.py my-project 3
+# ── 覆盖率 / MATERIAL GAP ──────────────────────────────────────────────────
+python scripts/ev_manager.py <slug> coverage   state/projects/<slug>/report.md
+python scripts/ev_manager.py <slug> gap-count  state/projects/<slug>/report.md
 
-# 添加证据记录
-python scripts/ev_manager.py my-project add \
-  --paper-id 2310.08560 \
-  --original "Our model achieves 94.2% on GSM8K..." \
-  --confidence high
+# ── 引用忠实度审计（S7）─────────────────────────────────────────────────────
+python scripts/ev_manager.py <slug> audit EV-001 faithful
+python scripts/ev_manager.py <slug> audit EV-002 drifted --note "问题|修改建议"
 
-# 会话恢复
-python scripts/session_restore.py my-project
+# ── Report 句-原文直接匹配（S7 Step 3.6）────────────────────────────────────
+# 提取 report.md 每条 [EV-xxx] 实际句子 → 写回 report_sentence，检出幽灵 EV
+python scripts/ev_manager.py <slug> verify-report state/projects/<slug>/report.md
+
+# ── 假设三色核查（S7 Step 3.7）──────────────────────────────────────────────
+# Step A: 列出假设章节所有待审 EV（假设句 vs 原文并排）
+python scripts/ev_manager.py <slug> check-hypothesis state/projects/<slug>/report.md
+
+# Step B: 逐条标记（原始错误记录永久保存在 hypothesis_audit 块）
+python scripts/ev_manager.py <slug> mark-hypothesis EV-007 yellow \
+  --sentence "原始假设句" --discrepancy "问题说明" --corrected "修正后的句子"
+
+# Step C: 写入颜色 + 替换错误句 + 同步更新 evidence.json
+python scripts/ev_manager.py <slug> check-hypothesis state/projects/<slug>/report.md --apply
+
+# ── 会话恢复 ─────────────────────────────────────────────────────────────────
+python scripts/session_restore.py <slug>
 ```
 
 所有脚本仅依赖 Python 3.9+ stdlib，无需额外安装。
@@ -147,10 +175,6 @@ python scripts/session_restore.py my-project
 |------------|------|
 | `math` | 本地统计计算（scipy/sympy）— 精确数值 |
 | `wolfram` | Wolfram Alpha LLM API — 自然语言数学/物理问题 |
-| `academic-search` | 学术文献免费搜索 |
-| `academic-write` | 学术写作辅助 |
-| `academic-chart` | 学术图表生成 |
-| `academic-formatter` | 格式化排版 |
 
 ---
 

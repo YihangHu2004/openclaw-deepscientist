@@ -69,10 +69,12 @@ interface Props {
   sessionKey:       string | null;
   slug?:            string;
   initialMessage?:  string;
+  compact?:         boolean;
   onSessionCreated?: (sessionId: string, sessionKey: string) => void;
+  onHtmlPreview?:   (html: string) => void;
 }
 
-export default function ChatPanel({ sessionId, sessionKey, slug, initialMessage, onSessionCreated }: Props) {
+export default function ChatPanel({ sessionId, sessionKey, slug, initialMessage, compact, onSessionCreated, onHtmlPreview }: Props) {
   const [messages, setMessages]       = useState<ChatMessage[]>([]);
   const [histLoading, setHistLoading] = useState(false);
   const [initSending, setInitSending] = useState(false);
@@ -87,25 +89,31 @@ export default function ChatPanel({ sessionId, sessionKey, slug, initialMessage,
     });
   }, []);
 
-  const { status, streamingText, sendMessage } = useGateway({
+  const { status, streamingText, isGenerating, agentActivity, sendMessage, sendInterrupt } = useGateway({
     sessionId,
     sessionKey,
     onMessage: handleNewMessage,
   });
 
-  // Auto-send initialMessage once connected (for new sessions from landing page)
+  // Auto-send initialMessage once connected AND sessionKey is available.
+  // Only mark as sent if sendMessage() actually succeeds (returns true),
+  // so the effect retries on the next status/sessionKey change if the key
+  // wasn't ready yet when the WebSocket first connected.
+   
   useEffect(() => {
-    if (!initialMessage || initialSentRef.current || status !== 'connected') return;
+    if (!initialMessage || initialSentRef.current || status !== 'connected' || !sessionKey) return;
+    const ok = sendMessage(initialMessage);
+    if (!ok) return;
     initialSentRef.current = true;
     const userMsg: ChatMessage = {
       id: `local-${Date.now()}`, role: 'user',
       content: [{ type: 'text', text: initialMessage }], timestamp: Date.now(),
     };
     setMessages(prev => [...prev, userMsg]);
-    sendMessage(initialMessage);
-  }, [status, initialMessage, sendMessage]);
+  }, [status, sessionKey, initialMessage, sendMessage]);
 
   // Load history when session changes
+   
   useEffect(() => {
     if (!sessionId) { setMessages([]); return; }
     setMessages([]);
@@ -131,14 +139,14 @@ export default function ChatPanel({ sessionId, sessionKey, slug, initialMessage,
         .map(f => `  ${f.isDirectory ? '📁' : '📄'} ${f.name}`)
         .join('\n');
       const text = `请读取并了解 **${slug}** 项目工作区，汇报当前研究进展。\n\n工作区文件：\n${fileList || '（空目录）'}\n\n请逐一读取关键文件（project.md、plan.md、brief.md、README.md 等 .md 类型文件），然后告诉我：研究背景、当前阶段和最新状态。`;
-      const userMsg: ChatMessage = {
+      const ok = sendMessage(text);
+      if (!ok) return;
+      setMessages(prev => [...prev, {
         id:        `local-${Date.now()}`,
         role:      'user',
         content:   [{ type: 'text', text }],
         timestamp: Date.now(),
-      };
-      setMessages(prev => [...prev, userMsg]);
-      sendMessage(text);
+      } as ChatMessage]);
     } catch (e) {
       console.error('Init workspace failed', e);
     } finally {
@@ -206,29 +214,71 @@ export default function ChatPanel({ sessionId, sessionKey, slug, initialMessage,
         ) : (
           <>
             {messages.map(msg => (
-              <MessageBubble key={msg.id} message={msg} />
+              <MessageBubble key={msg.id} message={msg} compact={compact} onHtmlPreview={onHtmlPreview} />
             ))}
             {/* Streaming placeholder */}
-            {streamingText && (
-              <div className="flex gap-2.5 mb-5 msg-enter" style={{ alignItems: 'flex-start' }}>
-                {/* AI indicator */}
+            {(streamingText || isGenerating) && (
+              <div className="flex mb-5 msg-enter" style={{ alignItems: 'flex-start', gap: compact ? 0 : 10 }}>
+                {!compact && (
+                  <div style={{
+                    flexShrink: 0, width: 34, height: 34, marginTop: 0,
+                    position: 'relative',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    {/* Outer spinning ring */}
+                    <div style={{
+                      position: 'absolute', inset: 0, borderRadius: '50%',
+                      border: '1px solid rgba(0,200,232,0.5)',
+                      animation: 'dc-work-spin 2s linear infinite',
+                    }} />
+                    {/* Inner counter-spin dashed ring */}
+                    <div style={{
+                      position: 'absolute', inset: 5, borderRadius: '50%',
+                      border: '1px dashed rgba(16,185,129,0.6)',
+                      animation: 'dc-work-spin-rev 3.5s linear infinite',
+                    }} />
+                    {/* Logo center */}
+                    <svg width="13" height="13" viewBox="0 0 32 32" fill="none" style={{ position: 'relative', zIndex: 1 }}>
+                      <defs>
+                        <linearGradient id="wk-g" x1="0%" y1="0%" x2="100%" y2="100%">
+                          <stop offset="0%" stopColor="#10b981"/>
+                          <stop offset="100%" stopColor="#00c8e8"/>
+                        </linearGradient>
+                      </defs>
+                      <path d="M6 22 L6 10 L16 4 L19 6.5 L9 12.5 L9 20.5 Z"     fill="url(#wk-g)"/>
+                      <path d="M13 28 L23 22 L23 13 L20 11.5 L20 18.5 L12 23.5 Z" fill="url(#wk-g)" opacity="0.85"/>
+                      <path d="M14 8 L26 15 L23 18 L14 12.5 Z"                    fill="url(#wk-g)" opacity="0.4"/>
+                      <circle cx="16" cy="15" r="1.8" fill="#fff"/>
+                    </svg>
+                    <style>{`
+                      @keyframes dc-work-spin     { to { transform: rotate(360deg); } }
+                      @keyframes dc-work-spin-rev { to { transform: rotate(-360deg); } }
+                    `}</style>
+                  </div>
+                )}
                 <div style={{
-                  flexShrink: 0, width: 22, height: 22, marginTop: 2,
-                  border: '1px solid rgba(129,140,248,0.4)',
-                  borderRadius: '50%',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  background: 'rgba(129,140,248,0.08)',
-                }}>
-                  <span className="pulse-dot inline-block"
-                        style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--cm-indigo)', display: 'inline-block' }} />
-                </div>
-                <div className="dc-prose" style={{
                   background: 'rgba(255,255,255,0.03)',
                   border: '1px solid rgba(255,255,255,0.08)',
-                  borderRadius: 12,
                   padding: '10px 14px', flex: 1, minWidth: 0,
                 }}>
-                  {streamingText}
+                  {/* Tool activity label when no text yet */}
+                  {!streamingText && agentActivity && (
+                    <div style={{
+                      fontFamily: 'var(--font-mono)', fontSize: 9,
+                      color: 'var(--nb-lime)', letterSpacing: '0.1em',
+                      textTransform: 'uppercase', marginBottom: 4,
+                      display: 'flex', alignItems: 'center', gap: 6,
+                    }}>
+                      <span className="pulse-dot inline-block"
+                            style={{ width: 5, height: 5, borderRadius: 0, background: 'var(--nb-lime)', display: 'inline-block' }} />
+                      {agentActivity}
+                    </div>
+                  )}
+                  {streamingText && (
+                    <div className="dc-prose">
+                      {streamingText}
+                    </div>
+                  )}
                   <span className="typing-cursor" />
                 </div>
               </div>
@@ -242,7 +292,10 @@ export default function ChatPanel({ sessionId, sessionKey, slug, initialMessage,
       <InputBar
         status={status}
         disabled={!sessionId}
+        isGenerating={isGenerating}
+        agentActivity={agentActivity}
         onSend={handleSend}
+        onInterrupt={sendInterrupt}
       />
     </div>
   );

@@ -6,9 +6,9 @@ import LobsterLogo from '@/components/LobsterLogo';
 import ProjectCard from '@/components/ProjectCard';
 import LaunchDialog from '@/components/LaunchDialog';
 import BladeCursor from '@/components/BladeCursor';
-import { fetchProjects, ProjectMeta } from '@/lib/api';
+import { fetchProjects, deleteProject, ProjectMeta } from '@/lib/api';
 
-type StatusFilter = 'all' | 'active' | 'planning' | 'done';
+type StatusFilter = 'all' | 'inprogress' | 'done';
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
@@ -37,24 +37,37 @@ export default function ProjectsPage() {
     finally { setLoading(false); }
   }, []);
 
+  const handleDelete = useCallback(async (slug: string) => {
+    await deleteProject(slug);
+    setProjects(prev => prev.filter(p => p.slug !== slug));
+  }, []);
+
+   
   useEffect(() => { load(); }, [load]);
+
+  const classifyStatus = (s: string | undefined): 'inprogress' | 'done' | 'unknown' => {
+    if (!s || s.toLowerCase() === 'unknown') return 'unknown';
+    const v = s.toLowerCase();
+    if (v.startsWith('done') || v.startsWith('complete')) return 'done';
+    return 'inprogress';
+  };
 
   const filtered = projects.filter(p => {
     const q = query.toLowerCase();
     const matchesQuery = !query ||
       p.slug.includes(q) || p.topic.toLowerCase().includes(q) ||
       p.tags.some(t => t.toLowerCase().includes(q));
+    const cls = classifyStatus(p.status);
     const matchesStatus = statusFilter === 'all' ||
-      p.status?.toLowerCase() === statusFilter ||
-      (statusFilter === 'done' && p.status?.toLowerCase() === 'complete');
+      (statusFilter === 'inprogress' && cls === 'inprogress') ||
+      (statusFilter === 'done' && cls === 'done');
     return matchesQuery && matchesStatus;
   });
 
   const counts = {
     all:      projects.length,
-    active:   projects.filter(p => p.status?.toLowerCase() === 'active').length,
-    planning: projects.filter(p => p.status?.toLowerCase() === 'planning').length,
-    done:     projects.filter(p => ['done', 'complete'].includes(p.status?.toLowerCase())).length,
+    inprogress: projects.filter(p => classifyStatus(p.status) === 'inprogress').length,
+    done:     projects.filter(p => classifyStatus(p.status) === 'done').length,
   };
 
   return (
@@ -152,8 +165,7 @@ export default function ProjectsPage() {
             <SectionLabel>Status</SectionLabel>
             {([
               ['all',      'All'],
-              ['active',   'Active'],
-              ['planning', 'Planning'],
+              ['inprogress', 'In Progress'],
               ['done',     'Done'],
             ] as [StatusFilter, string][]).map(([s, label]) => (
               <button
@@ -241,6 +253,7 @@ export default function ProjectsPage() {
                   project={p}
                   index={i}
                   onClick={() => router.push(`/project/${p.slug}`)}
+                  onDelete={handleDelete}
                 />
               ))}
             </div>

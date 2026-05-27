@@ -16,6 +16,7 @@ const crypto    = require('crypto');
 const express   = require('express');
 const WebSocket = require('ws');
 const cors      = require('cors');
+const multer    = require('multer');
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -367,7 +368,7 @@ async function readProjectMeta(slug) {
                  createdAt: null, topic: '', tags: [], sessionKey: null, updatedAt: 0 };
   try {
     const md = await fs.promises.readFile(path.join(projDir, 'project.md'), 'utf-8');
-    const m1 = md.match(/\*\*状态\*\*[:：]\s*(\S+)/);        if (m1) proj.status = m1[1];
+    const m1 = md.match(/\*\*状态\*\*[:：]\s*(.+)/);        if (m1) proj.status = m1[1].trim();
     const m2 = md.match(/\*\*创建\*\*[:：]\s*(\S+)/);        if (m2) proj.createdAt = m2[1];
     const m3 = md.match(/##\s*研究主题\s*\n+\*\*(.+?)\*\*/); if (m3) proj.topic = m3[1];
     else {
@@ -387,13 +388,30 @@ async function readProjectMeta(slug) {
 
 // ─── REST: projects ───────────────────────────────────────────────────────────
 
+function loadAllSessionsMeta() {
+  const meta = {};
+  try {
+    const agentsDir = path.join(OPENCLAW_HOME, 'agents');
+    for (const ag of fs.readdirSync(agentsDir)) {
+      const f = path.join(agentsDir, ag, 'sessions', 'sessions.json');
+      if (fs.existsSync(f)) Object.assign(meta, JSON.parse(fs.readFileSync(f, 'utf-8')));
+    }
+  } catch {}
+  return meta;
+}
+
 app.get('/api/projects', async (req, res) => {
   try {
     if (!fs.existsSync(WORKSPACE_ROOT)) return res.json([]);
     const entries = await fs.promises.readdir(WORKSPACE_ROOT, { withFileTypes: true });
     const slugs = entries.filter(e => e.isDirectory() && !e.name.startsWith('.')).map(e => e.name);
     const projects = await Promise.all(slugs.map(readProjectMeta));
-    projects.sort((a, b) => b.updatedAt - a.updatedAt);
+    const sessionsMeta = loadAllSessionsMeta();
+    projects.sort((a, b) => {
+      const ta = a.sessionKey ? (sessionsMeta[a.sessionKey]?.updatedAt || a.updatedAt) : a.updatedAt;
+      const tb = b.sessionKey ? (sessionsMeta[b.sessionKey]?.updatedAt || b.updatedAt) : b.updatedAt;
+      return tb - ta;
+    });
     res.json(projects);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -419,6 +437,56 @@ app.post('/api/projects', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+app.delete('/api/projects/:slug', async (req, res) => {
+  try {
+    const dir = path.resolve(WORKSPACE_ROOT, req.params.slug);
+    if (!dir.startsWith(WORKSPACE_ROOT)) return res.status(403).send('Forbidden');
+    if (!fs.existsSync(dir)) return res.status(404).json({ error: 'Not found' });
+
+    const slug = req.params.slug;
+
+    // Read metadata before deletion (for tombstone)
+    const meta = await readProjectMeta(slug).catch(() => ({ slug, topic: '', status: 'unknown', tags: [] }));
+
+    // 1. Delete project directory
+    await fs.promises.rm(dir, { recursive: true, force: true });
+
+    // 2. Update projects_registry.json (intent_router's state)
+    const registryPath = path.join(WORKSPACE_ROOT, '..', 'projects_registry.json');
+    if (fs.existsSync(registryPath)) {
+      try {
+        const reg = JSON.parse(fs.readFileSync(registryPath, 'utf-8'));
+        delete reg.projects?.[slug];
+        if (reg.current_project === slug) {
+          reg.current_project = null;
+          reg.current_pipeline = null;
+        }
+        fs.writeFileSync(registryPath, JSON.stringify(reg, null, 2), 'utf-8');
+      } catch (e) { console.warn('[delete] could not update registry:', e.message); }
+    }
+
+    // 3. Append tombstone to deleted_projects.json (anti-hallucination)
+    const tombstonePath = path.join(WORKSPACE_ROOT, '..', 'deleted_projects.json');
+    let tombstones = [];
+    if (fs.existsSync(tombstonePath)) {
+      try { tombstones = JSON.parse(fs.readFileSync(tombstonePath, 'utf-8')); } catch {}
+    }
+    tombstones.push({
+      slug,
+      topic:      meta.topic || '',
+      tags:       meta.tags  || [],
+      status:     meta.status || 'unknown',
+      deleted_at: new Date().toISOString(),
+    });
+    fs.writeFileSync(tombstonePath, JSON.stringify(tombstones, null, 2), 'utf-8');
+
+    res.json({ ok: true, slug });
+  } catch (err) {
+    console.error('[delete project]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.put('/api/projects/:slug/session', async (req, res) => {
   try {
     const dir = path.resolve(WORKSPACE_ROOT, req.params.slug);
@@ -429,6 +497,54 @@ app.put('/api/projects/:slug/session', async (req, res) => {
     await fs.promises.writeFile(path.join(dir, '.session'), sessionKey, 'utf-8');
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── REST: PDF upload ─────────────────────────────────────────────────────────
+
+const INCOMING_DIR = path.join(WORKSPACE_ROOT, '..', 'incoming');
+if (!fs.existsSync(INCOMING_DIR)) fs.mkdirSync(INCOMING_DIR, { recursive: true });
+
+const pdfUpload = multer({
+  dest: INCOMING_DIR,
+  limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    cb(null, file.mimetype === 'application/pdf' || file.originalname.toLowerCase().endsWith('.pdf'));
+  },
+});
+
+app.post('/api/upload-pdfs', (req, res) => {
+  // Ensure incoming dir exists (guards against first-run or manual deletion)
+  try { fs.mkdirSync(INCOMING_DIR, { recursive: true }); } catch {}
+
+  pdfUpload.array('files', 10)(req, res, err => {
+    if (err) {
+      const msg = err.code === 'LIMIT_FILE_SIZE'
+        ? '文件过大（单个 PDF 限 50MB）'
+        : err.message || '文件上传失败';
+      return res.status(400).json({ error: msg });
+    }
+    if (!req.files?.length) {
+      return res.status(400).json({ error: '未收到 PDF 文件（请确认文件格式为 .pdf）' });
+    }
+    try {
+      const stateDir = path.join(WORKSPACE_ROOT, '..');
+      const ts = Date.now();
+      const saved = req.files.map((f, i) => {
+        const ext  = path.extname(f.originalname) || '.pdf';
+        const base = path.basename(f.originalname, ext).replace(/[^\w一-鿿.-]/g, '_');
+        const dest = path.join(INCOMING_DIR, `${base}_${ts}_${i}${ext}`);
+        // copyFileSync + unlink works across drives; renameSync fails on cross-device
+        fs.copyFileSync(f.path, dest);
+        try { fs.unlinkSync(f.path); } catch {}
+        return { name: f.originalname, path: dest, relativePath: path.relative(stateDir, dest) };
+      });
+      res.json({ ok: true, files: saved });
+    } catch (e) {
+      (req.files || []).forEach(f => { try { fs.unlinkSync(f.path); } catch {} });
+      console.error('[upload-pdfs]', e);
+      res.status(500).json({ error: `保存文件失败：${e.message}` });
+    }
+  });
 });
 
 // ─── REST: project-scoped files ───────────────────────────────────────────────

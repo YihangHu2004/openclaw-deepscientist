@@ -25,6 +25,9 @@ python scripts/init_project.py <slug> --mode AUTO|INTERACTIVE
 ```
 脚本会同时创建 `pipeline_state.json`、`evidence.json` 及所有必要文件。
 禁止手动创建这些文件，禁止在脚本运行前开始任何研究步骤。
+⛔ **强制门控**：在输出任何文献列表、摘要分析、综述段落之前，检查
+   `state/projects/<slug>/pipeline_state.json` 是否存在。
+   不存在 → 立即停止，返回 SCIENTIST.md RESEARCH STEP 0-C 重新初始化。
 
 ### 严格顺序依赖链
 
@@ -33,7 +36,7 @@ python scripts/init_project.py <slug> --mode AUTO|INTERACTIVE
         前置：init_project.py 已运行 + 用户已确认              ├─ 并行 OK（都是搜索）
 阶段 2  semantic-scholar ────────────────────────────────────┘
         ↓ gate_check.py 2 → 文献覆盖门：论文库 ≥ 5 条，triage priority ≥ 3 篇
-阶段 3  paper-reader（顺序精读 Top 5-8 篇）
+阶段 3  paper-reader（顺序精读 Top 5-8 篇；每篇先读摘要，再按需升级全文）
         ↓ gate_check.py 3 → 精读完整门：结构化笔记 ≥ 5 篇，evidence.json ≥ 10 条 EV
 阶段 4  literature-synthesis
         ↓ gate_check.py 4 → 综述质量门：Related Work ≥ 200 词，Gap ≥ 3 条（各含 EV-xxx）
@@ -383,15 +386,21 @@ python scripts/evidence_memory.py <slug> query "<topic>" --top-k 5
 
 | # | Skill | 文件 | 输入 | 输出 | 验收门 |
 |---|-------|------|------|------|--------|
-| 1 | arxiv-search | `skills/arxiv-search/SKILL.md` | 研究主题 | 候选论文 + Triage 评分 | 文献覆盖门 |
+| 1 | arxiv-search | `skills/arxiv-search/SKILL.md` | 研究主题（若 papers/ 有 PDF 则先提取关键词） | 候选论文 + Triage 评分 | 文献覆盖门 |
 | 2 | semantic-scholar | `skills/semantic-scholar/SKILL.md` | 关键词/论文 ID | 高引论文 + 引用网络 | 文献覆盖门（共享） |
-| 3 | paper-reader | `skills/paper-reader/SKILL.md` | arXiv ID/URL | 结构化笔记 + EV 记录 | 精读完整门 |
+| 3 | paper-reader | `skills/paper-reader/SKILL.md` | papers/ 中的 PDF（优先）+ arXiv ID/URL | 结构化笔记 + EV 记录 | 精读完整门 |
 | 4 | literature-synthesis | `skills/literature-synthesis/SKILL.md` | 论文笔记 + evidence.json + evidence_memory.json | Related Work + Gap 列表 | 综述质量门 |
 | 5 | research-planner | `skills/research-planner/SKILL.md` | Gap 列表 | 实验设计 + 子问题 + 时间表 | 研究计划门 |
 | 6 | report-writer | `skills/report-writer/SKILL.md` | 全部前序产出 + evidence_memory.json | report.md + report.html | 报告完整门 |
 | 7 | claim-auditor | `skills/claim-auditor/SKILL.md` | report.md + evidence.json + evidence_memory.json | 审计报告（追加到 report.md） | 审计完整门（强制） |
 | 8 | paper-reviewer | `skills/paper-reviewer/SKILL.md` | report.md | peer_review_{日期}.md | 评审完整门（强制） |
 | 9 | science-slides | `skills/science-slides/SKILL.md` | report.md | 开题报告.pptx | PPT 结构门（可选） |
+
+> **S1 papers/ 优先**：若项目目录 `state/projects/<slug>/papers/` 存在 PDF 文件，阶段 1 开始前先执行：
+> `exec python3 -c "import pdfplumber,sys; [print(p.extract_text() or '') for p in pdfplumber.open(sys.argv[1]).pages[:8]]" <PDF路径>`
+> 提取每篇 PDF 前 6000 字，生成 3-5 个关键词作为 arxiv/semantic-scholar 搜索起点，写入 project.md。
+>
+> **S3 精读顺序**：先精读 `papers/` 目录中用户上传的 PDF（每篇生成完整结构化笔记 + EV 记录），再精读从 arxiv 下载的候选论文。papers/ 中的 PDF 计入阶段 3 精读总数（无需另外下载）。
 
 > S8 的 DA-CRITICAL 项须在报告中明确回应后方可通过评审门。支持三种模式：`full`（5 人完整评审）/ `quick`（仅 DA 扫描）/ `methodology`（聚焦实验方法）。S9 PPT 为可选阶段，S8 评审门通过后由用户决定是否生成。
 

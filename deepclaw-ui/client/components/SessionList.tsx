@@ -76,6 +76,7 @@ export default function SessionList({ activeSessionId, onSelect }: Props) {
     }
   }, []);
 
+   
   useEffect(() => { load(); }, [load]);
 
   return (

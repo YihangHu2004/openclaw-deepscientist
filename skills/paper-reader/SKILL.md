@@ -6,14 +6,39 @@
 
 ---
 
-## 全文获取策略（按优先级）
+## 获取策略：摘要先行，按需升级
 
-1. **arXiv HTML 最新版**（首选）：`web_fetch https://arxiv.org/html/{id}` → Trafilatura 语义提取
-2. **arXiv HTML 指定版本**（降级）：依次尝试 `v2`, `v3`, `v1`（404 说明无该版本 HTML，继续下一步）
-3. **arXiv 摘要页**：`web_fetch https://arxiv.org/abs/{id}` → 获取标题、摘要、PDF 链接
-4. **PDF via browser**：`browser https://arxiv.org/pdf/{id}` → 提取文本（慢，摘要不够时用）
-5. **Unpaywall**（非 arXiv）：`web_fetch https://api.unpaywall.org/v2/{doi}?email={USER_EMAIL}`
-6. **最终降级**：无全文时用 S2 摘要 + 引用，注明"基于摘要分析，未读全文"，source_type 标 abstract_only
+**每篇论文必须先读摘要，再决定是否拉全文。禁止跳过摘要直接获取全文。**
+
+### Step 0：摘要预读（必须，所有论文）
+
+```
+web_fetch https://arxiv.org/abs/{id}
+```
+
+获取：标题、摘要、作者、发表时间。本地 PDF（papers/ 目录）则用 pdfplumber 提取首页文字（限 1500 字）。
+
+读完摘要后，按以下标准判断是否需要全文：
+
+| 条件（满足任一） | 决策 |
+|----------------|------|
+| 需要具体实验数据、指标数值用于 EV 记录 | 升级全文 |
+| 核心方法细节在摘要中未说明 | 升级全文 |
+| 该论文是 priority 层且 Triage ≥ 6 | 升级全文 |
+| 摘要已能支撑所需 EV（结论类、概述类） | 停留摘要，source_type=abstract_only |
+| backup 层论文，主题相关但不是核心 | 停留摘要，source_type=abstract_only |
+
+**摘要足够时不升级**——abstract_only 的 EV 可用于综述辅助引用，仅不计入精读门有效证据。
+
+### Step 1：全文获取（仅 Step 0 判断需要时执行）
+
+按优先级降级：
+
+1. **arXiv HTML 最新版**：`web_fetch https://arxiv.org/html/{id}` → Trafilatura 语义提取
+2. **arXiv HTML 指定版本**：依次尝试 `v2`, `v3`, `v1`
+3. **PDF via browser**：`browser https://arxiv.org/pdf/{id}` → 提取文本（慢，摘要不够时用）
+4. **Unpaywall**（非 arXiv）：`web_fetch https://api.unpaywall.org/v2/{doi}?email={USER_EMAIL}`
+5. **最终降级**：全文不可达时保持 abstract_only，注明"基于摘要分析，未读全文"
 
 **表格与图注专项提取**（Trafilatura 会丢弃 `<table>`，须单独处理）：
 获取 arXiv HTML 后，额外用 BeautifulSoup 提取所有 `<table>` 元素，转为 Markdown 表格，追加到正文末尾：
@@ -28,8 +53,41 @@ for table in soup.find_all('table'):
 同样提取 `<figcaption>` 图注（标题 + 位置说明）。
 表格信息优先用于 literature-synthesis 的方法对比表；EV 引用表格数据时 claim_location 注明 "Table N"。
 
-**长文截断**：超过 5000 tokens → 保留前 2000（方法）+ 后 1000（结论/局限性）+ 中间省略标注；
-截断后 EV 记录的 source_type 标 `truncated_full_text`，claim_location 注明"基于截断版本"。
+**长文处理**：按 token 数选择策略：
+
+| 全文长度 | 策略 |
+|---------|------|
+| ≤ 30,000 tokens | 直接读全文，不截断 |
+| > 30,000 tokens | **Map-Reduce 精读**（见下方） |
+
+### Step 2：Map-Reduce 精读（仅全文 > 30,000 tokens 时触发）
+
+**Map 阶段**：将全文按 8,000 tokens 切块（相邻块重叠 500 tokens 保持连贯），对每块独立提取：
+
+```
+── Chunk N/M ──────────────────────────────
+核心主张：[该块中出现的可引用结论，逐条列出]
+方法细节：[算法/模型/数据处理的具体描述]
+实验数据：[指标数值、数据集名称、对比基线]
+局限性：[作者明确承认的不足]
+EV 候选：
+  - "<原文逐字引用 1>"
+  - "<原文逐字引用 2>"
+───────────────────────────────────────────
+```
+
+每块处理完后**立即写入临时文件** `state/projects/<slug>/tmp_map_{id}_chunk{N}.md`，再处理下一块。禁止在内存中累积所有块后再写。
+
+**Reduce 阶段**：读取所有 `tmp_map_*` 文件，执行：
+
+1. **去重**：合并重复出现的主张和数据点（保留出现次数最多的原文版本）
+2. **排序**：按重要性排列（实验数值 > 方法核心 > 背景描述）
+3. **EV 筛选**：从所有 EV 候选中选取最强的 ≤ 10 条，调用 ev_manager.py 写入 evidence.json
+4. **输出**：填写标准结构化笔记模板（研究问题 / 核心方法 / 实验设置 / 主要结果 / 局限性）
+
+Reduce 完成后删除所有 `tmp_map_*` 临时文件。
+
+Map-Reduce 处理的论文 EV 记录 source_type 标 `map_reduce_full_text`，confidence 视数据质量定（含数值 → high，无数值 → medium）。
 
 ---
 
@@ -57,12 +115,13 @@ for table in soup.find_all('table'):
 
 每个关键发现/方法/指标提取一条 EV 记录，按获取方式设置 confidence：
 
-| 获取方式 | source_type | confidence |
-|---------|-------------|------------|
-| arXiv HTML 全文，实验章节数据 | full_text | high |
-| arXiv HTML 全文，但信息零散 | full_text | medium |
-| 截断全文（>5000 tokens） | truncated_full_text | medium |
-| 仅摘要/S2 abstract | abstract_only | low |
+| 获取方式 | source_type | confidence | 计入精读门 |
+|---------|-------------|------------|-----------|
+| arXiv HTML 全文，实验章节数据 | full_text | high | ✅ |
+| arXiv HTML 全文，但信息零散 | full_text | medium | ✅ |
+| Map-Reduce 全文（>30,000 tokens） | map_reduce_full_text | high/medium | ✅ |
+| 摘要预读后判断不需升级 | abstract_only | low | ❌（辅助引用） |
+| 全文不可达，强制降级 | abstract_only | low | ❌（辅助引用） |
 
 每篇论文至少提取 **2 条** EV 记录（至少 1 条 confidence ≥ medium）。
 

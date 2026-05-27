@@ -11,6 +11,7 @@ Initializes the outreach state directory for a new outreach project:
 Exit code: 0 on success, 1 on error.
 """
 import json
+import os
 import sys
 import argparse
 from datetime import datetime, timezone
@@ -21,6 +22,22 @@ sys.stderr.reconfigure(encoding="utf-8")
 
 WORKSPACE = Path(__file__).parent.parent
 OUTREACH_DIR = WORKSPACE / "state" / "outreach"
+
+
+def deploy_hard_stop(slug: str, reason: str = "") -> None:
+    lock_path = WORKSPACE / ".hard_stop_init"
+    payload = {
+        "slug": slug,
+        "reason": reason or "outreach 初始化进行中",
+        "timestamp": now_iso(),
+    }
+    lock_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def release_hard_stop() -> None:
+    lock_path = WORKSPACE / ".hard_stop_init"
+    if lock_path.exists():
+        lock_path.unlink()
 
 
 def now_iso() -> str:
@@ -35,6 +52,10 @@ def init_outreach(slug: str, force: bool = False) -> None:
         print(f"   目录：{proj_dir}")
         print("   使用 --force 强制重新初始化（不删除已有联系人）")
         sys.exit(1)
+
+    # Deploy HARD STOP lock before creating files
+    deploy_hard_stop(slug, "outreach 初始化进行中 — 禁止提前产出")
+    print("🔒 HARD STOP 已部署: 完成初始化前禁止任何套磁内容产出")
 
     proj_dir.mkdir(parents=True, exist_ok=True)
     (proj_dir / "drafts").mkdir(exist_ok=True)
@@ -72,10 +93,13 @@ def init_outreach(slug: str, force: bool = False) -> None:
         }
         contacts_path.write_text(json.dumps(contacts, ensure_ascii=False, indent=2), encoding="utf-8")
 
+    # Release HARD STOP lock
+    release_hard_stop()
+
     width = 54
     bar = "═" * width
     print(f"\n╔{bar}╗")
-    print(f"║  🦞 Outreach 项目初始化完成                        ║")
+    print(f"║  🦞 Outreach 项目初始化完成  🔓 锁已解除         ║")
     print(f"╠{bar}╣")
     print(f"║  Slug：{slug:<47}║")
     print(f"║  目录：state/outreach/{slug:<32}║")

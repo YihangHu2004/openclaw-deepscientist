@@ -1,10 +1,10 @@
 # Skill 4：literature-synthesis — 文献综述生成
 
-**触发**：项目中已积累 ≥ 5 篇论文笔记，需要 Related Work / 对比表 / Gap 列表。
+**触发**：项目中已积累 ≥ 5 篇论文笔记，需要相关工作综述 / 对比表 / Gap 列表。
 
 **输入**：`state/projects/<slug>/project.md` 中的论文库 + `evidence.json`。
 
-**证据记忆预检**：开始写 Related Work 前先运行 `python scripts/evidence_memory.py <slug> query "<topic>" --top-k 5`，优先使用返回的 EV。
+**证据记忆预检**：开始写 相关工作 前先运行 `python scripts/evidence_memory.py <slug> query "<topic>" --top-k 5`，优先使用返回的 EV。
 
 **冲突证据优先**：若 `evidence_memory.json` 中存在 `relations.type=Contradict` 的记录，撰写综述和 Research Gap 时必须优先整合这些对立证据，明确说明分歧双方及其对应 EV-ID。
 
@@ -16,15 +16,14 @@
 - 时间线（演进脉络）
 - 方法类别（prompt-based / fine-tuning / RLHF 等）
 
-**Step 2：Related Work 草稿（英文学术段落）**
+**Step 2：相关工作综述草稿（强制中文，不经用户明确指令不切换英文）**
 
-每段至少引用 **1 个 EV-xxx**，禁止无引用结论：
+每段至少引用 **1 个 EV-xxx**，禁止无引用结论。论文原标题保留英文，所有分析文字使用中文：
 ```markdown
-**[方法类别 A]** Early work on {topic} focused on ... {Citation1} proposed ...
-[EV-001] However, these approaches share a common limitation: ...
+**[方法类别 A]** {话题} 的早期研究主要聚焦于……{Citation1} 提出了……[EV-001]
+然而，这类方法存在共同局限：……
 
-**[方法类别 B]** More recent work has explored ... {Citation2} demonstrated ...
-[EV-007, EV-012]
+**[方法类别 B]** 近期研究转向……{Citation2} 在……数据集上验证了……[EV-007, EV-012]
 ```
 引用格式：`(Wei et al., 2022) [EV-023]`
 
@@ -55,11 +54,11 @@
 
 **Step 6：Sprint Contract 预承诺（评估标准盲写）**
 
-在写 Related Work 之前，先写下评分标准（**不得在看到草稿后再修改标准**）：
+在写 相关工作 之前，先写下评分标准（**不得在看到草稿后再修改标准**）：
 ```markdown
 ## 综述质量预承诺 · {日期}
 - 我认为本轮综述合格的标准是：
-  1. Related Work 每段至少有 1 条 high EV 支撑数值声明
+  1. 相关工作每段至少有 1 条 high EV 支撑数值声明
   2. Gap 列表不少于 3 条，每条可追溯到具体论文的局限性字段
   3. 对比表覆盖 ≥ 5 篇论文，方法类型不少于 2 种
   4. [MATERIAL GAP] 标注数量 ≤ 总结论句数的 20%
@@ -74,7 +73,7 @@
 写入 SUMMARY.md（追加）：
 ```markdown
 ## 阶段 4 摘要 · {日期}
-- Related Work：{N 词，N 段，N 个 EV 引用}
+- 相关工作综述：{N 字，N 段，N 个 EV 引用}
 - Research Gap：{N 条，列出每条一句话}
 - 主要争议：{异议文献的核心反驳}
 - 对比表：{N 行，方法覆盖时间跨度}
@@ -86,7 +85,7 @@
 
 | 条件 | 要求 |
 |------|------|
-| Related Work 长度 | ≥ 200 词 |
+| 相关工作综述长度 | ≥ 300 字（中文）/ ≥ 200 词（英文，需用户明确指定） |
 | EV 引用密度 | 每段 ≥ 1 个 [EV-xxx] |
 | Research Gap | ≥ 3 条，每条引用 ≥ 1 EV-xxx |
 | 对比表 | ≥ 5 行 |
@@ -99,7 +98,7 @@
 完成本阶段内容后，按顺序执行：
 
 ```bash
-# 1. 签署物料护照（project.md 含 Related Work + Gap 列表）
+# 1. 签署物料护照（project.md 含 相关工作 + Gap 列表）
 python scripts/passport.py <slug> sign state/projects/<slug>/project.md 4
 
 # 2. 门控检查（综述质量门）

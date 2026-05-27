@@ -113,6 +113,7 @@ function Preview({ slug, filePath }: { slug: string; filePath: string }) {
   const ext = filePath.split('.').pop()?.toLowerCase() ?? '';
   const binary = ['pptx', 'docx', 'xlsx', 'zip', 'pdf', 'png', 'jpg', 'jpeg'].includes(ext);
 
+   
   useEffect(() => {
     if (binary) { setLoading(false); setContent('__binary__'); return; }
     setLoading(true);
@@ -184,15 +185,17 @@ function Preview({ slug, filePath }: { slug: string; filePath: string }) {
 type PanelMode = 'split' | 'preview' | 'full';
 
 interface Props {
-  slug:           string;
-  mode:           PanelMode;
-  onFileOpen:     () => void;
-  onExpand:       () => void;
-  onCollapse:     () => void;
-  onClosePreview: () => void;
+  slug:                string;
+  mode:                PanelMode;
+  htmlPreview?:        string | null;
+  onFileOpen:          () => void;
+  onExpand:            () => void;
+  onCollapse:          () => void;
+  onClosePreview:      () => void;
+  onClearHtmlPreview?: () => void;
 }
 
-export default function WorkPanel({ slug, mode, onFileOpen, onExpand, onCollapse, onClosePreview }: Props) {
+export default function WorkPanel({ slug, mode, htmlPreview, onFileOpen, onExpand, onCollapse, onClosePreview, onClearHtmlPreview }: Props) {
   const [roots, setRoots]           = useState<FileItem[]>([]);
   const [rootsLoading, setLoading]  = useState(true);
   const [selectedFile, setFile]     = useState<string | null>(null);
@@ -208,6 +211,7 @@ export default function WorkPanel({ slug, mode, onFileOpen, onExpand, onCollapse
     setLoading(false);
   }, [slug]);
 
+   
   useEffect(() => { loadRoots(); }, [loadRoots]);
 
   const handleFileSelect = (path: string) => {
@@ -220,10 +224,14 @@ export default function WorkPanel({ slug, mode, onFileOpen, onExpand, onCollapse
     onClosePreview();
   };
 
+  const handleCloseHtml = () => {
+    onClearHtmlPreview?.();
+  };
+
   // In 'full' mode, auto-collapse tree to give more preview space
   const showTree = mode !== 'full' || treeVisible;
   const treeW = showTree ? 220 : 0;
-  const previewVisible = selectedFile !== null;
+  const previewVisible = selectedFile !== null || !!htmlPreview;
 
   return (
     <div className="flex h-full border-l" style={{ borderColor: 'rgba(255,255,255,0.07)', borderLeftWidth: 1, background: 'var(--bg-base)' }}>
@@ -299,26 +307,39 @@ export default function WorkPanel({ slug, mode, onFileOpen, onExpand, onCollapse
               )}
 
               <span className="truncate flex-1" style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                {selectedFile?.split('/').pop()}
+                {htmlPreview
+                  ? <span style={{ color: 'var(--nb-cyan)', fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.08em' }}>AI PREVIEW</span>
+                  : selectedFile?.split('/').pop()}
               </span>
 
               <div className="flex items-center gap-1">
-                {/* Collapse: preview→split or full→preview */}
                 {mode === 'full' && (
                   <button onClick={onCollapse} className="dc-btn-ghost" title="缩小" style={{ fontSize: 16, padding: '2px 6px' }}>⊡</button>
                 )}
-                {/* Expand: split→preview or preview→full */}
                 {mode !== 'full' && (
                   <button onClick={onExpand} className="dc-btn-ghost" title="最大化" style={{ fontSize: 16, padding: '2px 6px' }}>⊞</button>
                 )}
-                {/* Close */}
-                <button onClick={handleClose} className="dc-btn-ghost" title="关闭预览" style={{ fontSize: 14, padding: '2px 6px' }}>✕</button>
+                <button
+                  onClick={htmlPreview ? handleCloseHtml : handleClose}
+                  className="dc-btn-ghost" title="关闭预览" style={{ fontSize: 14, padding: '2px 6px' }}
+                >✕</button>
               </div>
             </div>
 
             {/* Preview content */}
             <div className="flex-1 overflow-hidden">
-              <Preview slug={slug} filePath={selectedFile!} />
+              {htmlPreview ? (
+                <iframe
+                  srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+                    body{margin:0;background:#fff;font-family:'Microsoft YaHei',Arial,sans-serif}
+                  </style></head><body>${htmlPreview}</body></html>`}
+                  sandbox="allow-same-origin allow-scripts"
+                  style={{ width: '100%', height: '100%', border: 'none' }}
+                  title="AI Preview"
+                />
+              ) : (
+                <Preview slug={slug} filePath={selectedFile!} />
+              )}
             </div>
           </>
         )}

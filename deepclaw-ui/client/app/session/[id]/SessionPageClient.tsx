@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import LobsterLogo from '@/components/LobsterLogo';
 import ChatPanel from '@/components/ChatPanel';
+import BladeCursor from '@/components/BladeCursor';
 import { fetchProjects, bindProjectSession } from '@/lib/api';
 
 export default function SessionPageClient() {
@@ -19,6 +20,7 @@ export default function SessionPageClient() {
   const knownSlugsRef = useRef<Set<string> | null>(null);
   const pollRef       = useRef<ReturnType<typeof setInterval> | null>(null);
 
+   
   useEffect(() => {
     setSessionKey(sessionStorage.getItem(`sk-${sessionId}`));
   }, [sessionId]);
@@ -96,6 +98,8 @@ export default function SessionPageClient() {
           initialMessage={initialQ || undefined}
         />
       </div>
+
+      <BladeCursor />
     </div>
   );
 }

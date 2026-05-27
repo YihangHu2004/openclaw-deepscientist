@@ -2,6 +2,8 @@
 
 **触发**：report.md 完成后，用户需要获得批判性反馈；或在 report-writer + claim-auditor 之后运行。
 
+**语言**：所有评审意见、DA 裁定、改进建议、修订摘要均使用**中文**。评分卡标签（DA-CRITICAL 等）保留英文标识符以便 gate_check.py 解析；论文原文引用保留英文。
+
 **模式**：
 - `full`（默认）：5 人评审团（4 个标准评审 + 1 个 Devil's Advocate）
 - `quick`：仅运行 DA 快速扫描（10 分钟内）

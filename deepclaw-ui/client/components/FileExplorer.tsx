@@ -125,6 +125,7 @@ function Preview({ filePath }: { filePath: string | null }) {
   const [content, setContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+   
   useEffect(() => {
     if (!filePath) { setContent(null); return; }
     const ext = filePath.split('.').pop()?.toLowerCase() ?? '';
@@ -231,6 +232,7 @@ export default function FileExplorer() {
     setLoading(false);
   }, []);
 
+   
   useEffect(() => { loadRoots(); }, [loadRoots]);
 
   const handleFile = (path: string) => {
