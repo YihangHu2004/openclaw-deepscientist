@@ -210,7 +210,7 @@ cp USER_CONFIG.example.md ~/.openclaw/workspace-scientist/USER_CONFIG.md
 #   "workspace": "~/.openclaw/workspace-scientist" }
 
 # 4. 安装 Python 依赖
-pip install trafilatura python-pptx markdown numpy scipy sympy
+pip install trafilatura python-pptx markdown numpy scipy sympy pdfplumber pypdf
 
 # 5. 安装 DeepClaw UI 依赖
 cd deepclaw-ui/server && npm install && cd ..

@@ -150,11 +150,11 @@ fi
 if command -v pip &>/dev/null; then
   echo ""
   echo "📦 安装 Python 依赖..."
-  pip install --quiet trafilatura python-pptx markdown numpy scipy sympy
+  pip install --quiet trafilatura python-pptx markdown numpy scipy sympy pdfplumber pypdf
   echo "✅ Python 依赖已安装"
 else
   echo "⚠️  未找到 pip，请手动安装："
-  echo "   pip install trafilatura python-pptx markdown numpy scipy sympy"
+  echo "   pip install trafilatura python-pptx markdown numpy scipy sympy pdfplumber pypdf"
 fi
 
 # 8. 安装 Workspace UI Node.js 依赖
