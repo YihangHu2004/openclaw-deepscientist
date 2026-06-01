@@ -21,13 +21,20 @@
 
 **初始化必须通过脚本完成**（见 SCIENTIST.md §1.2 初始化协议）：
 ```bash
-python scripts/init_project.py <slug> --mode AUTO|INTERACTIVE
+python scripts/init_project.py <slug> --mode AUTO|INTERACTIVE --topic "<topic>" --keywords <kw1> <kw2> ...
 ```
 脚本会同时创建 `pipeline_state.json`、`evidence.json` 及所有必要文件。
 禁止手动创建这些文件，禁止在脚本运行前开始任何研究步骤。
 ⛔ **强制门控**：在输出任何文献列表、摘要分析、综述段落之前，检查
    `state/projects/<slug>/pipeline_state.json` 是否存在。
    不存在 → 立即停止，返回 SCIENTIST.md RESEARCH STEP 0-C 重新初始化。
+
+**Trajectory Memory 横切协议**：每个研究阶段 Skill 开始前和关键动作完成后，
+必须遵守 `skills/trajectory-memory/SKILL.md`：
+- 阶段开始前读取 `trajectory_context.md` 和最近 `trajectory_memory.jsonl`。
+- 只将 trajectory memory 作为 workflow prior，不得作为论文证据。
+- 关键工具调用、脚本执行或持久决策后写入一条 JSONL ReAct 轨迹。
+- 文献事实、指标、数据集和引用仍必须进入 `evidence.json`。
 
 ### 严格顺序依赖链
 

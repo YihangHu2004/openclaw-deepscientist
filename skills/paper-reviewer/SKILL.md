@@ -11,6 +11,14 @@
 
 ---
 
+## Trajectory Memory Protocol
+
+Before executing this skill, follow `skills/trajectory-memory/SKILL.md`: read
+`trajectory_context.md` and recent `trajectory_memory.jsonl` as workflow prior.
+After meaningful reviewer-role, DA-critical, consensus, or revision-routing
+decisions, append a `S8_PaperReview` trajectory record. Do not treat trajectory
+memory as evidence.
+
 ## 评审团结构
 
 | 角色 | 职责 | 评分框架 |

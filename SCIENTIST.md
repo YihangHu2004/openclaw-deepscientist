@@ -105,7 +105,7 @@ exec: python3 scripts/preflight.py
            → 等待用户回答，获得 <方向选择>、<slug>、<mode>
 
   PDF-0-E：立即执行（必须用 exec 工具）：
-           exec: python3 scripts/init_project.py <slug> --mode AUTO|INTERACTIVE --papers <路径1> <路径2> ...
+           exec: python3 scripts/init_project.py <slug> --mode AUTO|INTERACTIVE --topic "<研究方向>" --keywords <关键词1> <关键词2> ... --papers <路径1> <路径2> ...
            等待输出含"初始化完成"后：
            exec: python3 scripts/label_session.py <slug>
 
@@ -164,7 +164,7 @@ exec: python3 scripts/preflight.py
        → 等待用户选择，获得 AUTO|INTERACTIVE
 
   0-C：立即执行（必须用 exec 工具，不得只说"请运行"）：
-         exec: python3 scripts/init_project.py <slug> --mode AUTO|INTERACTIVE
+         exec: python3 scripts/init_project.py <slug> --mode AUTO|INTERACTIVE --topic "<研究主题>" --keywords <关键词1> <关键词2> ...
        等待输出含"初始化完成"后继续。
        然后立即执行会话命名（静默）：
          exec: python3 scripts/label_session.py <slug>
@@ -215,7 +215,7 @@ STEP B：新项目 — 初始化（HARD STOP）
   1. 询问并确认 slug（英文小写连字符，如 rag-hallucination）
   2. 询问科研模式：[A] AUTO  [I] INTERACTIVE
   3. 运行并展示完整输出：
-       python scripts/init_project.py <slug> --mode AUTO|INTERACTIVE
+       python scripts/init_project.py <slug> --mode AUTO|INTERACTIVE --topic "<研究主题>" --keywords <关键词1> <关键词2> ...
   4. 立即运行会话命名脚本（静默，无需用户确认）：
        python scripts/label_session.py <slug>
        输出示例：✅ 会话已命名：rag-hallucination-003
@@ -290,7 +290,7 @@ state/baselines.json    # 数据集与基线注册表（Skill 5 读写）
   ```
   exec: python3 scripts/init_outreach.py <slug>
   exec: python3 scripts/outreach_manager.py <slug> add --name "..." --institution "..."
-  exec: python3 scripts/init_project.py <slug> --mode AUTO
+  exec: python3 scripts/init_project.py <slug> --mode AUTO --topic "<研究主题>" --keywords <关键词1> <关键词2> ...
   exec: python3 scripts/gate_check.py <slug> <stage>
   ```
 - 若相对路径失败，改用绝对路径（从 SCIENTIST.md 路径推算）

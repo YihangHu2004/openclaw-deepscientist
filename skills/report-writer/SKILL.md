@@ -8,6 +8,14 @@
 
 ---
 
+## Trajectory Memory Protocol
+
+Before executing this skill, follow `skills/trajectory-memory/SKILL.md`: read
+`trajectory_context.md` and recent `trajectory_memory.jsonl` as workflow prior.
+After meaningful report-structure, Sprint Contract, evidence coverage, or
+revision decisions, append a `S6_ReportWriting` trajectory record. Do not treat
+trajectory memory as evidence.
+
 ## 写作前证据预审（Sprint Contract）
 
 先运行 `python scripts/evidence_memory.py <slug> query "<topic>" --top-k 5`，确认核心主题已有可用 EV；默认不使用 `unsupported` EV。

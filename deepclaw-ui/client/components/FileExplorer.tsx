@@ -19,6 +19,7 @@ function FileTypeIcon({ name }: { name: string }) {
     md:   { d: 'M4 4h8v10H4z M6 7h4 M6 9h4 M6 11h2', color: '#0a7ea4' },
     html: { d: 'M3 4l1.5 10L8 15l3.5-1L14 4 M6 8h4 M5.5 11h5', color: '#f97316' },
     json: { d: 'M5 4C5 4 4 5 4 7S5 9 5 10S4 11 4 13 M11 4C11 4 12 5 12 7S11 9 11 10S12 11 12 13', color: '#eab308' },
+    jsonl:{ d: 'M5 4C5 4 4 5 4 7S5 9 5 10S4 11 4 13 M11 4C11 4 12 5 12 7S11 9 11 10S12 11 12 13', color: '#eab308' },
     pdf:  { d: 'M4 2h7l3 3v11H4z M10 2v4h4 M6 9h4 M6 11h3', color: '#ef4444' },
     csv:  { d: 'M3 5h10 M3 8h10 M3 11h10 M6 3v10 M9 3v10', color: '#22c55e' },
     png:  { d: 'M3 3h10v10H3z M5 8l2-2 2 2 2-3', color: '#a855f7' },

@@ -6,6 +6,13 @@
 
 ---
 
+## Trajectory Memory Protocol
+
+Before executing this skill, follow `skills/trajectory-memory/SKILL.md`: read
+`trajectory_context.md` and recent `trajectory_memory.jsonl` as workflow prior.
+After meaningful citation-network, author, or paper lookup actions, append a
+`S2_SemanticScholar` trajectory record. Do not treat trajectory memory as evidence.
+
 ## 端点速查
 
 | 功能 | 端点 |

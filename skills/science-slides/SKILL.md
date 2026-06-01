@@ -6,6 +6,13 @@
 
 ---
 
+## Trajectory Memory Protocol
+
+Before executing this skill, follow `skills/trajectory-memory/SKILL.md`: read
+`trajectory_context.md` and recent `trajectory_memory.jsonl` as workflow prior.
+After meaningful template, outline, render, or export decisions, append a
+`S9_ScienceSlides` trajectory record. Do not treat trajectory memory as evidence.
+
 ## 工作流（四步走）
 
 ```

@@ -6,6 +6,13 @@
 
 ---
 
+## Trajectory Memory Protocol
+
+Before executing this skill, follow `skills/trajectory-memory/SKILL.md`: read
+`trajectory_context.md` and recent `trajectory_memory.jsonl` as workflow prior.
+After meaningful search actions or query strategy decisions, append a
+`S1_ArxivSearch` trajectory record. Do not treat trajectory memory as evidence.
+
 ## 查询语法
 
 | 需求 | 示例 |

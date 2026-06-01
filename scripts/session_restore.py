@@ -16,6 +16,11 @@ from pathlib import Path
 WORKSPACE = Path(__file__).parent.parent
 STATE_DIR  = WORKSPACE / "state" / "projects"
 
+try:
+    from trajectory_logger import TrajectoryLogger
+except Exception:  # pragma: no cover - restore must not depend on memory
+    TrajectoryLogger = None
+
 STAGE_NAMES = {
     1: "arxiv-search",
     2: "semantic-scholar",
@@ -89,6 +94,35 @@ def run_doctor() -> None:
     if result.returncode != 0:
         print(result.stdout.strip())
         print()  # blank line before the restore card
+
+
+def load_trajectory_prompt_context(proj_dir: Path, n: int = 3) -> str:
+    blocks = []
+    reuse_context_path = proj_dir / "trajectory_context.md"
+    if reuse_context_path.exists():
+        try:
+            reuse_context = reuse_context_path.read_text(encoding="utf-8")
+            if len(reuse_context) > 2400:
+                reuse_context = reuse_context[:2400].rstrip() + "\n... [truncated]"
+            blocks.append("Reusable Project Trajectory Context:")
+            blocks.append(reuse_context)
+        except Exception as exc:
+            blocks.append(f"Reusable Project Trajectory Context: unavailable ({exc}).")
+
+    if TrajectoryLogger is None:
+        blocks.append("Trajectory Memory: unavailable.")
+        return "\n\n".join(blocks)
+    try:
+        logger = TrajectoryLogger(proj_dir)
+        context = logger.get_recent_context(n=n)
+        if len(context) > 2400:
+            context = context[:2400].rstrip() + "\n... [truncated]"
+        blocks.append("Current Project Trajectory Memory:")
+        blocks.append(context)
+        return "\n\n".join(blocks)
+    except Exception as exc:
+        blocks.append(f"Trajectory Memory: unavailable ({exc}).")
+        return "\n\n".join(blocks)
 
 
 def main() -> None:
@@ -197,6 +231,11 @@ def main() -> None:
 
     print(f"║  → 门控验证：python scripts/gate_check.py {slug} {current_stage:<14}║")
     print(f"╚{bar}╝\n")
+
+
+    print("Trajectory Memory Context (inject into agent prompt):")
+    print(load_trajectory_prompt_context(proj_dir, n=3))
+    print()
 
 
 if __name__ == "__main__":

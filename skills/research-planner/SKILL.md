@@ -6,6 +6,14 @@
 
 ---
 
+## Trajectory Memory Protocol
+
+Before executing this skill, follow `skills/trajectory-memory/SKILL.md`: read
+`trajectory_context.md` and recent `trajectory_memory.jsonl` as workflow prior.
+After meaningful planning, Socratic branch, feasibility, baseline, or experiment
+design decisions, append a `S5_ResearchPlanner` trajectory record. Do not treat
+trajectory memory as evidence.
+
 ## 工作流
 
 **Step 0：查询基线注册表**

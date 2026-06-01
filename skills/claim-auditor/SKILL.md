@@ -9,6 +9,14 @@
 
 ---
 
+## Trajectory Memory Protocol
+
+Before executing this skill, follow `skills/trajectory-memory/SKILL.md`: read
+`trajectory_context.md` and recent `trajectory_memory.jsonl` as workflow prior.
+After meaningful sampling, claim-audit, unsupported-claim, or fix decisions,
+append a `S7_ClaimAudit` trajectory record. Do not treat trajectory memory as
+evidence.
+
 > ⚠️ **禁止自生成审计脚本**：不得编写 run_audit.py 或任何自定义审计代码替代本流程。
 > 门控必须且只能通过 `python scripts/gate_check.py <slug> 7` 执行。
 

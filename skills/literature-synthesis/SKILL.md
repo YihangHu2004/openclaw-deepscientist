@@ -10,6 +10,14 @@
 
 ---
 
+## Trajectory Memory Protocol
+
+Before executing this skill, follow `skills/trajectory-memory/SKILL.md`: read
+`trajectory_context.md` and recent `trajectory_memory.jsonl` as workflow prior.
+After meaningful synthesis, contrast-table, gap, or sprint-contract decisions,
+append a `S4_LitReview` trajectory record. Do not treat trajectory memory as
+evidence.
+
 ## 生成步骤
 
 **Step 1：分类整理**

@@ -6,6 +6,14 @@
 
 ---
 
+## Trajectory Memory Protocol
+
+Before executing this skill, follow `skills/trajectory-memory/SKILL.md`: read
+`trajectory_context.md` and recent `trajectory_memory.jsonl` as workflow prior.
+After meaningful paper-read, extraction, full-text escalation, or EV-writing
+actions, append a `S3_PaperReader` trajectory record. Do not treat trajectory
+memory as evidence.
+
 ## 获取策略：摘要先行，按需升级
 
 **每篇论文必须先读摘要，再决定是否拉全文。禁止跳过摘要直接获取全文。**

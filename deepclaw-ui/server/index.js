@@ -98,14 +98,14 @@ if (device) {
 const SESSIONS_DIR   = path.join(OPENCLAW_HOME, 'agents', 'main', 'sessions');
 const SESSIONS_META  = path.join(SESSIONS_DIR, 'sessions.json');
 
-// Resolve workspace projects directory.
+// Resolve workspace directory.
 // Priority: env var → openclaw.json agents.list → directory scan → hardcoded fallback
-function resolveWorkspaceRoot() {
+function resolveWorkspaceDir() {
   // 1. Explicit env override
   if (process.env.OPENCLAW_WORKSPACE) {
     return path.isAbsolute(process.env.OPENCLAW_WORKSPACE)
       ? process.env.OPENCLAW_WORKSPACE
-      : path.join(OPENCLAW_HOME, process.env.OPENCLAW_WORKSPACE, 'state', 'projects');
+      : path.join(OPENCLAW_HOME, process.env.OPENCLAW_WORKSPACE);
   }
   // 2. Read from openclaw.json → agents.list (most reliable)
   try {
@@ -115,21 +115,34 @@ function resolveWorkspaceRoot() {
     const agents  = cfg?.agents?.list || [];
     // Prefer scientist agent; fall back to first agent that has a workspace field
     const agent   = agents.find(a => a.id === 'scientist') || agents.find(a => a.workspace);
-    if (agent?.workspace) return path.join(agent.workspace, 'state', 'projects');
+    if (agent?.workspace) return agent.workspace;
   } catch {}
   // 3. Scan ~/.openclaw/ for workspace-*/state/projects/
   try {
     for (const entry of fs.readdirSync(OPENCLAW_HOME)) {
       if (!entry.startsWith('workspace')) continue;
-      const candidate = path.join(OPENCLAW_HOME, entry, 'state', 'projects');
-      if (fs.existsSync(candidate)) return candidate;
+      const candidate = path.join(OPENCLAW_HOME, entry);
+      if (fs.existsSync(path.join(candidate, 'state', 'projects'))) return candidate;
     }
   } catch {}
   // 4. Hardcoded fallback
-  return path.join(OPENCLAW_HOME, 'workspace-scientist', 'state', 'projects');
+  return path.join(OPENCLAW_HOME, 'workspace-scientist');
 }
 
-const WORKSPACE_ROOT = resolveWorkspaceRoot();
+const WORKSPACE_DIR  = resolveWorkspaceDir();
+const WORKSPACE_ROOT = path.join(WORKSPACE_DIR, 'state', 'projects');
+const WORKSPACE_DENY_NAMES = new Set(['.git', '.openclaw', 'node_modules']);
+
+function isPathInside(base, target) {
+  const rel = path.relative(base, target);
+  return rel === '' || (!!rel && !rel.startsWith('..') && !path.isAbsolute(rel));
+}
+
+function isBlockedWorkspacePath(target) {
+  const rel = path.relative(WORKSPACE_DIR, target);
+  if (!rel) return false;
+  return rel.split(path.sep).some(part => WORKSPACE_DENY_NAMES.has(part));
+}
 
 // ─── Gateway session creation (for POST /api/sessions/create) ─────────────────
 
@@ -311,10 +324,12 @@ app.get('/api/sessions/:sessionId/linked-project', async (req, res) => {
 
 app.get('/api/workspace/files', async (req, res) => {
   try {
-    const dirPath = path.resolve(WORKSPACE_ROOT, req.query.path || '');
-    if (!dirPath.startsWith(WORKSPACE_ROOT)) return res.status(403).send('Forbidden');
+    const dirPath = path.resolve(WORKSPACE_DIR, req.query.path || '');
+    if (!isPathInside(WORKSPACE_DIR, dirPath) || isBlockedWorkspacePath(dirPath)) return res.status(403).send('Forbidden');
     const items = await fs.promises.readdir(dirPath, { withFileTypes: true });
-    res.json(items.map(i => ({ name: i.name, isDirectory: i.isDirectory() })));
+    res.json(items
+      .filter(i => !isBlockedWorkspacePath(path.join(dirPath, i.name)))
+      .map(i => ({ name: i.name, isDirectory: i.isDirectory() })));
   } catch (err) {
     res.status(err.code === 'ENOENT' ? 404 : 500).send(err.message);
   }
@@ -323,8 +338,8 @@ app.get('/api/workspace/files', async (req, res) => {
 app.get('/api/workspace/file', async (req, res) => {
   try {
     if (!req.query.path) return res.status(400).send('Missing path');
-    const filePath = path.resolve(WORKSPACE_ROOT, req.query.path);
-    if (!filePath.startsWith(WORKSPACE_ROOT)) return res.status(403).send('Forbidden');
+    const filePath = path.resolve(WORKSPACE_DIR, req.query.path);
+    if (!isPathInside(WORKSPACE_DIR, filePath) || isBlockedWorkspacePath(filePath)) return res.status(403).send('Forbidden');
 
     let stat;
     try { stat = await fs.promises.stat(filePath); }
@@ -332,7 +347,7 @@ app.get('/api/workspace/file', async (req, res) => {
     if (!stat.isFile()) return res.status(400).send('Not a file');
 
     const ext = path.extname(filePath).toLowerCase();
-    if (['.html', '.md', '.txt', '.json', '.csv'].includes(ext)) {
+    if (['.html', '.md', '.txt', '.json', '.jsonl', '.csv'].includes(ext)) {
       const data = await fs.promises.readFile(filePath, 'utf-8');
       res.type(ext === '.html' ? 'text/html' : 'text/plain').send(data);
       return;
@@ -791,5 +806,6 @@ server.listen(PORT, '127.0.0.1', () => {
   console.log(`✅ DeepClaw UI: http://127.0.0.1:${PORT}`);
   console.log(`   Next.js:     http://127.0.0.1:${NEXT_PORT} (proxied)`);
   console.log(`   WS proxy:    ws://127.0.0.1:${PORT}/ws/gateway → ${GATEWAY_WS_URL}`);
-  console.log(`   Workspace:   ${WORKSPACE_ROOT}`);
+  console.log(`   Workspace:   ${WORKSPACE_DIR}`);
+  console.log(`   Projects:    ${WORKSPACE_ROOT}`);
 });

@@ -12,6 +12,7 @@ Exit code: 0 on success, 1 on error.
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -24,6 +25,18 @@ WORKSPACE = Path(__file__).parent.parent
 STATE_DIR  = WORKSPACE / "state" / "projects"
 GLOBAL_STATE = WORKSPACE / "state"
 SCRIPTS_DIR = WORKSPACE / "scripts"
+REGISTRY_PATH = WORKSPACE / "state" / "projects_registry.json"
+
+try:
+    from trajectory_logger import TrajectoryLogger, TrajectoryLoggerError
+except Exception:  # pragma: no cover - project init must still work without memory
+    TrajectoryLogger = None
+    TrajectoryLoggerError = RuntimeError
+
+try:
+    from project_reuse import build_project_reuse_context
+except Exception:  # pragma: no cover - project init must still work without reuse
+    build_project_reuse_context = None
 
 
 def deploy_hard_stop(slug: str, reason: str = "") -> None:
@@ -64,9 +77,197 @@ def write_json(path: Path, data: dict) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def init_project(slug: str, mode: str, papers: list[str] | None = None) -> None:
+def load_project_registry() -> dict:
+    """Load the workspace project registry, falling back to a valid empty shape."""
+
+    default = {
+        "current_project": None,
+        "current_pipeline": "research",
+        "projects": {},
+        "pending_alerts": [],
+    }
+    if not REGISTRY_PATH.exists():
+        return default
+    try:
+        data = json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return default
+    if not isinstance(data, dict):
+        return default
+    data.setdefault("current_project", None)
+    data.setdefault("current_pipeline", "research")
+    data.setdefault("projects", {})
+    data.setdefault("pending_alerts", [])
+    if not isinstance(data["projects"], dict):
+        data["projects"] = {}
+    if not isinstance(data["pending_alerts"], list):
+        data["pending_alerts"] = []
+    return data
+
+
+def save_project_registry(registry: dict) -> None:
+    """Atomically persist the project registry used by routing and the UI."""
+
+    REGISTRY_PATH.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = REGISTRY_PATH.with_suffix(REGISTRY_PATH.suffix + ".tmp")
+    tmp_path.write_text(json.dumps(registry, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp_path.replace(REGISTRY_PATH)
+
+
+def register_project(
+    slug: str,
+    mode: str,
+    topic: str = "",
+    keywords: list[str] | None = None,
+) -> None:
+    """Register an initialized project for router/session/UI bookkeeping."""
+
+    registry = load_project_registry()
+    now = now_iso()
+    projects = registry.setdefault("projects", {})
+    previous = projects.get(slug, {}) if isinstance(projects.get(slug), dict) else {}
+    created_at = previous.get("created_at") or now
+    projects[slug] = {
+        **previous,
+        "slug": slug,
+        "display_name": previous.get("display_name") or slug,
+        "pipeline": "research",
+        "mode": mode,
+        "status": previous.get("status") or "active",
+        "path": str((STATE_DIR / slug).relative_to(WORKSPACE)).replace("\\", "/"),
+        "topic": topic,
+        "keywords": keywords or [],
+        "created_at": created_at,
+        "updated_at": now,
+        "last_active_pipeline": "research",
+    }
+    registry["current_project"] = slug
+    registry["current_pipeline"] = "research"
+    save_project_registry(registry)
+
+
+STOPWORDS = {
+    "the", "and", "for", "with", "from", "that", "this", "into", "about",
+    "research", "survey", "review", "project", "paper", "papers", "study",
+}
+
+
+def tokenize(text: str) -> set[str]:
+    words = re.findall(r"[a-zA-Z0-9][a-zA-Z0-9_-]{2,}", text.lower())
+    return {w for w in words if w not in STOPWORDS}
+
+
+def read_text_safe(path: Path, limit: int = 20000) -> str:
+    try:
+        return path.read_text(encoding="utf-8")[:limit]
+    except Exception:
+        return ""
+
+
+def project_reuse_context(
+    slug: str,
+    topic: str = "",
+    keywords: list[str] | None = None,
+    top_k: int = 3,
+    recent_n: int = 3,
+) -> tuple[str, bool]:
+    """Retrieve reusable trajectory context from existing project memories."""
+
+    if build_project_reuse_context is not None:
+        try:
+            return build_project_reuse_context(
+                projects_dir=STATE_DIR,
+                new_slug=slug,
+                topic=topic,
+                keywords=keywords or [],
+                top_k=top_k,
+                recent_n=recent_n,
+            )
+        except Exception as exc:
+            return f"Project trajectory reuse unavailable: {exc}", False
+
+    if TrajectoryLogger is None or not STATE_DIR.exists():
+        return "No reusable project trajectory found.", False
+
+    query_tokens = tokenize(" ".join([slug.replace("-", " "), topic, " ".join(keywords or [])]))
+    candidates = []
+    for proj in STATE_DIR.iterdir():
+        if not proj.is_dir() or proj.name == slug:
+            continue
+        memory_path = proj / "trajectory_memory.jsonl"
+        if not memory_path.exists() or memory_path.stat().st_size == 0:
+            continue
+        profile = "\n".join([
+            proj.name.replace("-", " "),
+            read_text_safe(proj / "project.md"),
+            read_text_safe(proj / "trajectory_summary.md"),
+        ])
+        tokens = tokenize(profile)
+        if not tokens:
+            continue
+        overlap = len(query_tokens & tokens)
+        union = len(query_tokens | tokens) or 1
+        score = overlap / union
+        if overlap == 0:
+            continue
+        candidates.append((score, memory_path.stat().st_mtime, proj))
+
+    if not candidates:
+        return "No reusable project trajectory found.", False
+
+    candidates.sort(key=lambda x: (x[0], x[1]), reverse=True)
+    blocks = [
+        "Retrieved project-local trajectory memories.",
+        "Use these as workflow priors only; do not treat them as evidence.",
+    ]
+    for score, _mtime, proj in candidates[:top_k]:
+        try:
+            context = TrajectoryLogger(proj).get_recent_context(n=recent_n)
+        except Exception as exc:
+            context = f"Trajectory Memory unavailable for {proj.name}: {exc}"
+        blocks.extend([
+            "",
+            f"## Reuse candidate: {proj.name}",
+            f"keyword_similarity={score:.3f}",
+            context,
+        ])
+    return "\n".join(blocks), True
+
+
+def write_trajectory_context(proj_dir: Path, slug: str, context: str) -> Path:
+    """Persist reusable global trajectory context inside the new project."""
+
+    out = proj_dir / "trajectory_context.md"
+    out.write_text(
+        "\n".join([
+            "# Trajectory Memory Context",
+            "",
+            f"Project: {slug}",
+            "",
+            "This file is generated when the project is initialized.",
+            "Use it as prior workflow memory, not as paper evidence.",
+            "Literature claims still require EV records in evidence.json.",
+            "",
+            "```text",
+            context,
+            "```",
+            "",
+        ]),
+        encoding="utf-8",
+    )
+    return out
+
+
+def init_project(
+    slug: str,
+    mode: str,
+    papers: list[str] | None = None,
+    topic: str = "",
+    keywords: list[str] | None = None,
+) -> None:
     proj_dir = STATE_DIR / slug
     papers = papers or []
+    keywords = keywords or []
 
     if proj_dir.exists():
         print(f"⚠️  项目已存在：{proj_dir}")
@@ -178,7 +379,29 @@ def init_project(slug: str, mode: str, papers: list[str] | None = None) -> None:
 ## 下一步
 
 """
+    project_md += (
+        "\n## Trajectory Memory Context\n\n"
+        "See `trajectory_context.md` for reusable workflow memory from previous projects.\n"
+        "Treat it as operational prior context, not as citation evidence.\n"
+    )
+    if topic or keywords:
+        project_md += "\n## Project Intake Metadata\n\n"
+        if topic:
+            project_md += f"Topic: {topic}\n"
+        if keywords:
+            project_md += f"Keywords: {', '.join(keywords)}\n"
     (proj_dir / "project.md").write_text(project_md, encoding="utf-8")
+    trajectory_context, trajectory_available = project_reuse_context(
+        slug,
+        topic=topic,
+        keywords=keywords,
+    )
+    trajectory_context_path = write_trajectory_context(proj_dir, slug, trajectory_context)
+    if TrajectoryLogger is not None:
+        try:
+            TrajectoryLogger(proj_dir)
+        except Exception as exc:
+            print(f"鈿狅笍  Project trajectory memory init skipped: {exc}", file=sys.stderr)
 
     # ── TODO.md ───────────────────────────────────────────────────────────────
     todo_md = f"""# {slug} 研究进度
@@ -207,8 +430,35 @@ def init_project(slug: str, mode: str, papers: list[str] | None = None) -> None:
         })
         print("✅ 已初始化 state/baselines.json")
 
+    try:
+        register_project(slug, mode, topic=topic, keywords=keywords)
+    except Exception as exc:
+        print(f"⚠️  Project registry sync skipped: {exc}", file=sys.stderr)
+
     # Release HARD STOP lock after successful init
     release_hard_stop()
+
+    if TrajectoryLogger is not None:
+        try:
+            logger = TrajectoryLogger(proj_dir)
+            logger.log_step(
+                phase="Project_Init",
+                step=logger.get_next_step("Project_Init"),
+                thought="Initialize a new project and attach reusable trajectory context from prior work.",
+                action_name="init_project",
+                action_params={
+                    "slug": slug,
+                    "mode": mode,
+                    "papers": papers,
+                    "topic": topic,
+                    "keywords": keywords,
+                    "trajectory_context": str(trajectory_context_path.relative_to(WORKSPACE)),
+                },
+                observation=f"Created project {slug}; trajectory context available={trajectory_available}.",
+                reflection="New project can reuse trajectory_context.md as workflow memory while keeping evidence claims gated by evidence.json.",
+            )
+        except Exception as exc:
+            print(f"⚠️  Trajectory memory log skipped: {exc}", file=sys.stderr)
 
     # ── Summary ───────────────────────────────────────────────────────────────
     print(f"\n✅ 项目 [{slug}] 初始化完成")
@@ -216,6 +466,7 @@ def init_project(slug: str, mode: str, papers: list[str] | None = None) -> None:
     print(f"   模式：{mode}")
     print(f"   目录：{proj_dir}\n")
     print("📁 已创建文件：")
+    print(f"   Trajectory context: {trajectory_context_path.relative_to(proj_dir)}")
     for f in sorted(proj_dir.rglob("*")):
         if f.is_file():
             print(f"   · {f.relative_to(proj_dir)}")
@@ -240,8 +491,19 @@ def main() -> None:
         default=[],
         help="PDF 路径列表，复制到 papers/ 目录",
     )
+    parser.add_argument(
+        "--topic",
+        default="",
+        help="Research topic or question used to retrieve similar project trajectory memories.",
+    )
+    parser.add_argument(
+        "--keywords",
+        nargs="*",
+        default=[],
+        help="Extra keywords used for project trajectory memory reuse.",
+    )
     args = parser.parse_args()
-    init_project(args.slug, args.mode, args.papers)
+    init_project(args.slug, args.mode, args.papers, topic=args.topic, keywords=args.keywords)
 
 
 if __name__ == "__main__":

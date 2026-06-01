@@ -29,6 +29,7 @@
 
 | Skill ID | 文件 | 职责 | 典型触发时机 |
 |----------|------|------|------------|
+| trajectory-memory | [skills/trajectory-memory/SKILL.md](trajectory-memory/SKILL.md) | Project-local JSONL ReAct trajectory memory; similar-project reuse context; stage-level memory read/log protocol | Before and after any research-stage skill that reads context, calls tools, or makes durable decisions |
 | math-analysis | [skills/math-analysis/SKILL.md](math-analysis/SKILL.md) | 统计验证 / 效应量 / 符号数学（numpy/scipy/sympy） | LLM 判断需要定量验证或数学推导时 |
 
 ## 套磁 Skill（关键词强触发）

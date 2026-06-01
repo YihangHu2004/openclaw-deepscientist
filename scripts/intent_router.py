@@ -218,6 +218,9 @@ def route(message: str) -> dict:
     }
     if pipeline == "research":
         load_context["baselines"] = "state/baselines.json"
+        if project_slug:
+            load_context["trajectory"] = f"state/projects/{project_slug}/trajectory_memory.jsonl"
+            load_context["trajectory_context"] = f"state/projects/{project_slug}/trajectory_context.md"
     if pipeline == "outreach":
         load_context["user_profile"] = "USER_PROFILE.md"
 
