@@ -399,7 +399,29 @@ def init_project(
     trajectory_context_path = write_trajectory_context(proj_dir, slug, trajectory_context)
     if TrajectoryLogger is not None:
         try:
-            TrajectoryLogger(proj_dir)
+            logger = TrajectoryLogger(proj_dir)
+            logger.log_memory_retrieval(
+                requester_phase="Project_Init",
+                files_read=[
+                    "state/projects/*/project.md",
+                    "state/projects/*/SUMMARY.md",
+                    "state/projects/*/trajectory_summary.md",
+                    "state/projects/*/trajectory_memory.jsonl",
+                ],
+                records_returned=trajectory_context.count("- ["),
+                query={
+                    "slug": slug,
+                    "topic": topic,
+                    "keywords": keywords,
+                    "top_k": 3,
+                    "recent_n": 3,
+                },
+                observation=(
+                    f"Retrieved reusable project trajectory context; "
+                    f"available={trajectory_available}; wrote {trajectory_context_path.relative_to(WORKSPACE)}."
+                ),
+                reflection="Project initialization now exposes old-memory retrieval as a visible trajectory step.",
+            )
         except Exception as exc:
             print(f"鈿狅笍  Project trajectory memory init skipped: {exc}", file=sys.stderr)
 
@@ -441,7 +463,7 @@ def init_project(
     if TrajectoryLogger is not None:
         try:
             logger = TrajectoryLogger(proj_dir)
-            logger.log_step(
+            init_record = logger.log_step(
                 phase="Project_Init",
                 step=logger.get_next_step("Project_Init"),
                 thought="Initialize a new project and attach reusable trajectory context from prior work.",
@@ -457,6 +479,7 @@ def init_project(
                 observation=f"Created project {slug}; trajectory context available={trajectory_available}.",
                 reflection="New project can reuse trajectory_context.md as workflow memory while keeping evidence claims gated by evidence.json.",
             )
+            logger.log_memory_store(init_record, requester_phase="Project_Init")
         except Exception as exc:
             print(f"⚠️  Trajectory memory log skipped: {exc}", file=sys.stderr)
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { fetchProjectFiles, fetchProjectFileText, projectFileUrl, FileItem } from '@/lib/api';
@@ -24,6 +24,121 @@ function FileIcon() {
       <path d="M2 1h6l3 3v9a1 1 0 01-1 1H2a1 1 0 01-1-1V2a1 1 0 011-1z M8 1v4h3"
             stroke="rgba(255,255,255,0.35)" strokeWidth="1.3" strokeLinejoin="round" fill="none"/>
     </svg>
+  );
+}
+
+interface TrajectoryRecord {
+  timestamp?: string;
+  phase?: string;
+  step?: number | string;
+  thought?: string;
+  action?: {
+    tool_name?: string;
+    parameters?: Record<string, unknown>;
+  };
+  observation?: string;
+  reflection?: string;
+}
+
+function TrajectoryTimeline({ content }: { content: string }) {
+  const { records, malformed } = useMemo(() => {
+    const parsed: TrajectoryRecord[] = [];
+    let bad = 0;
+    for (const line of content.split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      try {
+        const value = JSON.parse(trimmed);
+        if (value && typeof value === 'object') parsed.push(value as TrajectoryRecord);
+        else bad += 1;
+      } catch {
+        bad += 1;
+      }
+    }
+    return { records: parsed, malformed: bad };
+  }, [content]);
+
+  const visible = records.slice(-80).reverse();
+
+  const labelFor = (phase?: string) => {
+    if (phase === 'Memory_Retrieve') return { label: 'memory read', color: '#38bdf8' };
+    if (phase === 'Memory_Store') return { label: 'memory write', color: '#34d399' };
+    return { label: 'stage action', color: '#f59e0b' };
+  };
+
+  const summarize = (record: TrajectoryRecord) => {
+    const params = record.action?.parameters ?? {};
+    if (record.phase === 'Memory_Retrieve') {
+      return `read=${JSON.stringify(params.files_read ?? [])}; returned=${String(params.records_returned ?? 0)}; requester=${String(params.requester_phase ?? '')}`;
+    }
+    if (record.phase === 'Memory_Store') {
+      return `stored=${String(params.stored_phase ?? '')} step=${String(params.stored_step ?? '')}; action=${String(params.stored_action ?? '')}`;
+    }
+    return record.observation || '';
+  };
+
+  if (records.length === 0) {
+    return (
+      <div className="p-5" style={{ color: 'var(--text-muted)', fontSize: 13 }}>
+        No trajectory records found.
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-full overflow-y-auto dc-scroll p-4" style={{ background: 'var(--bg-base)' }}>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div>
+          <div style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 600 }}>Trajectory Timeline</div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+            Showing latest {visible.length} of {records.length} JSONL records{malformed ? `; skipped ${malformed} malformed lines` : ''}
+          </div>
+        </div>
+      </div>
+      <div className="flex flex-col gap-2">
+        {visible.map((record, idx) => {
+          const meta = labelFor(record.phase);
+          return (
+            <div key={`${record.timestamp}-${record.phase}-${record.step}-${idx}`}
+                 style={{
+                   border: '1px solid var(--border-subtle)',
+                   borderRadius: 8,
+                   background: 'var(--bg-surface)',
+                   padding: '10px 11px',
+                 }}>
+              <div className="flex items-center gap-2" style={{ minWidth: 0 }}>
+                <span style={{
+                  fontSize: 10,
+                  color: meta.color,
+                  border: `1px solid ${meta.color}55`,
+                  borderRadius: 999,
+                  padding: '1px 7px',
+                  fontFamily: 'var(--font-mono)',
+                  flexShrink: 0,
+                }}>{meta.label}</span>
+                <span className="truncate" style={{ fontSize: 12, color: 'var(--text-primary)', fontWeight: 600 }}>
+                  {record.phase || 'Unknown'} step={String(record.step ?? '')}
+                </span>
+                <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>
+                  {record.timestamp || ''}
+                </span>
+              </div>
+              <div style={{ marginTop: 7, fontSize: 11, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
+                Action: {record.action?.tool_name || ''}
+              </div>
+              <div style={{ marginTop: 5, fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5, wordBreak: 'break-word' }}>
+                {summarize(record)}
+              </div>
+              {record.reflection && (
+                <div style={{ marginTop: 5, fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.45, wordBreak: 'break-word' }}>
+                  Reflection: {record.reflection}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -169,6 +284,10 @@ function Preview({ slug, filePath }: { slug: string; filePath: string }) {
         </div>
       </div>
     );
+  }
+
+  if (fileName === 'trajectory_memory.jsonl') {
+    return <TrajectoryTimeline content={content ?? ''} />;
   }
 
   return (

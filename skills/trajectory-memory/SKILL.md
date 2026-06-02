@@ -45,16 +45,25 @@ Before executing a research-stage skill:
 
 1. Identify the active `<slug>`.
 2. Read `state/projects/<slug>/trajectory_context.md` if it exists.
-3. Read the current project's recent trajectory context:
+3. Read the current project's recent trajectory context and log that read as a
+   visible memory step:
 
 ```bash
-python scripts/trajectory_logger.py state/projects/<slug> recent --n 5
+python scripts/trajectory_logger.py state/projects/<slug> retrieve \
+  --requester-phase "<phase>" \
+  --source trajectory_context.md \
+  --source trajectory_memory.jsonl \
+  --n 5 \
+  --output both
 ```
 
 4. Use the retrieved context to avoid repeated failed searches, reuse useful
    workflow patterns, and preserve known project-specific constraints.
 5. If the context conflicts with `evidence.json`, `project.md`, or the user's
    latest instruction, prefer the current project files and user instruction.
+
+The command output contains a `MEMORY CHECK CARD`. Surface that card in the
+interactive reply before running the stage action.
 
 ## Logging Protocol
 
@@ -67,12 +76,24 @@ python scripts/trajectory_logger.py state/projects/<slug> log \
   --action-name "<tool_or_script_name>" \
   --action-param key=value \
   --observation "<objective result after execution>" \
-  --reflection "<optional lesson, retry reason, or next constraint>"
+  --reflection "<optional lesson, retry reason, or next constraint>" \
+  --output both
 ```
+
+The `log` command also appends a `Memory_Store` bookkeeping step by default, so
+the workspace timeline shows what project memory was stored. Use
+`--no-store-event` only for maintenance scripts that must avoid bookkeeping
+noise.
+
+The command output contains a `TRAJECTORY ACTION CARD` and a `MEMORY STORE
+CARD`. Surface both cards in the interactive reply after completing the stage
+action.
 
 Use stable phase names such as:
 
 ```text
+Memory_Retrieve
+Memory_Store
 S1_ArxivSearch
 S2_SemanticScholar
 S3_PaperReader
@@ -84,6 +105,12 @@ S8_PaperReview
 S9_ScienceSlides
 Project_Init
 Session_Restore
+```
+
+For a human-facing view of both research actions and memory IO, run:
+
+```bash
+python scripts/trajectory_logger.py state/projects/<slug> timeline --n 20
 ```
 
 ## New-Project Reuse Protocol
@@ -132,6 +159,8 @@ Before finishing a stage, confirm:
 ```text
 trajectory_context.md was considered
 recent trajectory_memory.jsonl was considered
+Memory_Retrieve step shows what memory was read
 new meaningful action was logged
+Memory_Store step shows what memory was stored
 evidence claims still point to evidence.json
 ```

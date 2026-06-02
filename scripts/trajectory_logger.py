@@ -27,6 +27,93 @@ if hasattr(sys.stderr, "reconfigure"):
 
 
 MEMORY_FILENAME = "trajectory_memory.jsonl"
+MEMORY_RETRIEVE_PHASE = "Memory_Retrieve"
+MEMORY_STORE_PHASE = "Memory_Store"
+
+
+def _clip(text: str, limit: int = 1600) -> str:
+    text = str(text)
+    if len(text) <= limit:
+        return text
+    return text[:limit].rstrip() + "\n... [truncated]"
+
+
+def _json_compact(value: Any, limit: int = 800) -> str:
+    try:
+        text = json.dumps(value, ensure_ascii=False, sort_keys=True)
+    except TypeError:
+        text = str(value)
+    return _clip(text, limit=limit)
+
+
+def format_memory_check_card(record: Dict[str, Any], context: str = "") -> str:
+    """Format a Memory_Retrieve record as a user-facing interaction card."""
+
+    action = record.get("action") if isinstance(record.get("action"), dict) else {}
+    params = action.get("parameters", {}) if isinstance(action.get("parameters"), dict) else {}
+    files = params.get("files_read", [])
+    lines = [
+        "MEMORY CHECK CARD",
+        "",
+        f"阶段: {params.get('requester_phase', '')}",
+        f"Memory step: {record.get('phase', '')} step={record.get('step', '')}",
+        f"Action: {action.get('tool_name', '')}",
+        "",
+        "读取记忆:",
+    ]
+    if files:
+        lines.extend(f"- {item}" for item in files)
+    else:
+        lines.append("- none")
+    lines.extend([
+        "",
+        f"返回记录: {params.get('records_returned', 0)}",
+        f"查询参数: {_json_compact(params.get('query', {}), limit=500)}",
+        "",
+        "使用约束:",
+        "- trajectory memory 只作为 workflow prior",
+        "- 论文事实、指标、引用仍必须来自 evidence.json",
+    ])
+    if context:
+        lines.extend([
+            "",
+            "Recent memory preview:",
+            _clip(context, limit=1600),
+        ])
+    return "\n".join(lines)
+
+
+def format_memory_store_card(record: Dict[str, Any], store_record: Optional[Dict[str, Any]]) -> str:
+    """Format a stored stage record and its Memory_Store event as a card."""
+
+    action = record.get("action") if isinstance(record.get("action"), dict) else {}
+    lines = [
+        "TRAJECTORY ACTION CARD",
+        "",
+        f"阶段: {record.get('phase', '')}",
+        f"Stage step: {record.get('phase', '')} step={record.get('step', '')}",
+        f"Action: {action.get('tool_name', '')}",
+        f"Observation: {_clip(record.get('observation', ''), limit=700)}",
+    ]
+    if record.get("reflection"):
+        lines.append(f"Reflection: {_clip(record.get('reflection', ''), limit=500)}")
+
+    lines.extend(["", "MEMORY STORE CARD", ""])
+    if not store_record:
+        lines.append("Memory store event: skipped")
+        return "\n".join(lines)
+
+    store_action = store_record.get("action") if isinstance(store_record.get("action"), dict) else {}
+    params = store_action.get("parameters", {}) if isinstance(store_action.get("parameters"), dict) else {}
+    lines.extend([
+        f"Memory step: {store_record.get('phase', '')} step={store_record.get('step', '')}",
+        f"Action: {store_action.get('tool_name', '')}",
+        f"存储文件: {params.get('file', MEMORY_FILENAME)}",
+        f"已存储阶段: {params.get('stored_phase', '')} step={params.get('stored_step', '')}",
+        f"已存储动作: {params.get('stored_action', '')}",
+        f"Observation: {_clip(store_record.get('observation', ''), limit=700)}",
+    ])
+    return "\n".join(lines)
 
 
 class TrajectoryLoggerError(RuntimeError):
@@ -135,10 +222,7 @@ class TrajectoryLogger:
         if n <= 0:
             return "Trajectory Memory: no records requested."
 
-        recent: Deque[Dict[str, Any]] = deque(maxlen=n)
-        for record in self._iter_records():
-            if phase is None or record.get("phase") == phase:
-                recent.append(record)
+        recent = self.get_recent_records(phase=phase, n=n)
 
         if not recent:
             phase_label = f" for phase {phase}" if phase else ""
@@ -167,6 +251,119 @@ class TrajectoryLogger:
                 block.append(f"  Reflection: {reflection}")
             blocks.append("\n".join(block))
 
+        return "\n\n".join(blocks)
+
+    def get_recent_records(
+        self,
+        phase: Optional[str] = None,
+        n: int = 5,
+        include_memory_events: bool = True,
+    ) -> list[Dict[str, Any]]:
+        """Return the latest n records without loading the whole JSONL file."""
+
+        if n <= 0:
+            return []
+
+        recent: Deque[Dict[str, Any]] = deque(maxlen=n)
+        for record in self._iter_records():
+            record_phase = record.get("phase")
+            if not include_memory_events and record_phase in {MEMORY_RETRIEVE_PHASE, MEMORY_STORE_PHASE}:
+                continue
+            if phase is None or record_phase == phase:
+                recent.append(record)
+        return list(recent)
+
+    def log_memory_retrieval(
+        self,
+        requester_phase: str,
+        files_read: list[str],
+        records_returned: int,
+        query: Optional[Dict[str, Any]] = None,
+        observation: str = "",
+        reflection: str = "",
+    ) -> Dict[str, Any]:
+        """Log a visible step describing trajectory memory retrieval."""
+
+        files = [str(item) for item in files_read]
+        return self.log_step(
+            phase=MEMORY_RETRIEVE_PHASE,
+            step=self.get_next_step(MEMORY_RETRIEVE_PHASE),
+            thought=f"Retrieve trajectory memory before {requester_phase} so prior workflow context is visible and auditable.",
+            action_name="trajectory_memory.retrieve",
+            action_params={
+                "requester_phase": str(requester_phase),
+                "files_read": files,
+                "records_returned": int(records_returned),
+                "query": query or {},
+            },
+            observation=observation or f"Read {len(files)} memory source(s) and returned {records_returned} record(s).",
+            reflection=reflection or "Memory retrieval was logged as a first-class trajectory step for UI/workspace inspection.",
+        )
+
+    def log_memory_store(
+        self,
+        stored_record: Dict[str, Any],
+        requester_phase: Optional[str] = None,
+        reflection: str = "",
+    ) -> Optional[Dict[str, Any]]:
+        """Log a visible step describing that a trajectory record was stored."""
+
+        stored_phase = str(stored_record.get("phase", ""))
+        if stored_phase == MEMORY_STORE_PHASE:
+            return None
+        action = stored_record.get("action") if isinstance(stored_record.get("action"), dict) else {}
+        return self.log_step(
+            phase=MEMORY_STORE_PHASE,
+            step=self.get_next_step(MEMORY_STORE_PHASE),
+            thought=f"Persist the completed {stored_phase} trajectory step so future sessions can restore it.",
+            action_name="trajectory_memory.store",
+            action_params={
+                "requester_phase": str(requester_phase or stored_phase),
+                "file": MEMORY_FILENAME,
+                "stored_phase": stored_phase,
+                "stored_step": stored_record.get("step"),
+                "stored_action": action.get("tool_name", ""),
+                "stored_timestamp": stored_record.get("timestamp", ""),
+            },
+            observation=(
+                f"Stored {stored_phase} step={stored_record.get('step')} "
+                f"action={action.get('tool_name', '')} in {MEMORY_FILENAME}."
+            ),
+            reflection=reflection or "Storage of the trajectory step is now itself visible in the project memory timeline.",
+        )
+
+    def get_timeline_context(self, n: int = 20) -> str:
+        """Return a compact human-facing timeline including memory IO events."""
+
+        records = self.get_recent_records(n=n, include_memory_events=True)
+        if not records:
+            return "Trajectory Timeline: no records found."
+
+        blocks = [f"Trajectory Timeline (latest {len(records)} records)"]
+        for record in records:
+            action = record.get("action") if isinstance(record.get("action"), dict) else {}
+            params = action.get("parameters", {}) if isinstance(action.get("parameters"), dict) else {}
+            phase = record.get("phase", "")
+            label = "memory read" if phase == MEMORY_RETRIEVE_PHASE else "memory write" if phase == MEMORY_STORE_PHASE else "stage action"
+            detail = record.get("observation", "")
+            if phase == MEMORY_RETRIEVE_PHASE:
+                detail = (
+                    f"read={params.get('files_read', [])}; "
+                    f"returned={params.get('records_returned', 0)}; "
+                    f"requester={params.get('requester_phase', '')}"
+                )
+            elif phase == MEMORY_STORE_PHASE:
+                detail = (
+                    f"stored={params.get('stored_phase', '')} step={params.get('stored_step', '')}; "
+                    f"action={params.get('stored_action', '')}"
+                )
+            blocks.append(
+                "\n".join([
+                    f"- [{record.get('timestamp', '')}] {phase} step={record.get('step', '')} ({label})",
+                    f"  Action: {action.get('tool_name', '')}",
+                    f"  {detail}",
+                ])
+            )
         return "\n\n".join(blocks)
 
     def get_last_state(self) -> Optional[Dict[str, Any]]:
@@ -268,6 +465,32 @@ def main() -> None:
     recent_parser.add_argument("--phase", default=None)
     recent_parser.add_argument("--n", type=int, default=5)
 
+    retrieve_parser = subparsers.add_parser(
+        "retrieve",
+        help="Print recent context and append a Memory_Retrieve step.",
+    )
+    retrieve_parser.add_argument("--phase", default=None)
+    retrieve_parser.add_argument("--n", type=int, default=5)
+    retrieve_parser.add_argument("--requester-phase", default="Manual")
+    retrieve_parser.add_argument(
+        "--source",
+        action="append",
+        default=[],
+        help="Memory source file that was considered. May be repeated.",
+    )
+    retrieve_parser.add_argument(
+        "--output",
+        choices=["card", "json", "both"],
+        default="both",
+        help="Output format for the retrieval event.",
+    )
+
+    timeline_parser = subparsers.add_parser(
+        "timeline",
+        help="Print a compact timeline including memory retrieve/store steps.",
+    )
+    timeline_parser.add_argument("--n", type=int, default=20)
+
     subparsers.add_parser("last", help="Print the last valid JSONL record.")
 
     log_parser = subparsers.add_parser("log", help="Append one trajectory step.")
@@ -284,6 +507,17 @@ def main() -> None:
     )
     log_parser.add_argument("--observation", required=True)
     log_parser.add_argument("--reflection", default="")
+    log_parser.add_argument(
+        "--no-store-event",
+        action="store_true",
+        help="Do not append a Memory_Store bookkeeping step after this log.",
+    )
+    log_parser.add_argument(
+        "--output",
+        choices=["card", "json", "both"],
+        default="both",
+        help="Output format for the log/store event.",
+    )
 
     args = parser.parse_args()
     logger = TrajectoryLogger(args.workspace_dir)
@@ -293,6 +527,36 @@ def main() -> None:
         n = getattr(args, "n", 5)
         print(f"Trajectory memory file: {logger.log_path}")
         print(logger.get_recent_context(phase=phase, n=n))
+        return
+
+    if args.command == "retrieve":
+        phase = getattr(args, "phase", None)
+        n = getattr(args, "n", 5)
+        records = logger.get_recent_records(phase=phase, n=n)
+        context = logger.get_recent_context(phase=phase, n=n)
+        files_read = list(args.source or [])
+        if not files_read:
+            files_read = [MEMORY_FILENAME]
+        retrieval = logger.log_memory_retrieval(
+            requester_phase=args.requester_phase,
+            files_read=files_read,
+            records_returned=len(records),
+            query={"phase": phase, "n": n},
+        )
+        if args.output in ("card", "both"):
+            print(format_memory_check_card(retrieval, context=context))
+        if args.output == "both":
+            print("\n--- JSON ---")
+        if args.output in ("json", "both"):
+            print(json.dumps({
+                "trajectory_memory_file": str(logger.log_path),
+                "context": context,
+                "memory_retrieval_record": retrieval,
+            }, ensure_ascii=False, indent=2))
+        return
+
+    if args.command == "timeline":
+        print(logger.get_timeline_context(n=args.n))
         return
 
     if args.command == "last":
@@ -328,7 +592,18 @@ def main() -> None:
             observation=args.observation,
             reflection=args.reflection,
         )
-        print(json.dumps(record, ensure_ascii=False, indent=2))
+        store_record = None
+        if not args.no_store_event and args.phase != MEMORY_STORE_PHASE:
+            store_record = logger.log_memory_store(record, requester_phase=args.phase)
+        if args.output in ("card", "both"):
+            print(format_memory_store_card(record, store_record))
+        if args.output == "both":
+            print("\n--- JSON ---")
+        if args.output in ("json", "both"):
+            print(json.dumps({
+                "record": record,
+                "memory_store_record": store_record,
+            }, ensure_ascii=False, indent=2))
         return
 
 

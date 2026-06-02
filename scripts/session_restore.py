@@ -17,9 +17,10 @@ WORKSPACE = Path(__file__).parent.parent
 STATE_DIR  = WORKSPACE / "state" / "projects"
 
 try:
-    from trajectory_logger import TrajectoryLogger
+    from trajectory_logger import TrajectoryLogger, format_memory_check_card
 except Exception:  # pragma: no cover - restore must not depend on memory
     TrajectoryLogger = None
+    format_memory_check_card = None
 
 STAGE_NAMES = {
     1: "arxiv-search",
@@ -98,10 +99,12 @@ def run_doctor() -> None:
 
 def load_trajectory_prompt_context(proj_dir: Path, n: int = 3) -> str:
     blocks = []
+    files_read = []
     reuse_context_path = proj_dir / "trajectory_context.md"
     if reuse_context_path.exists():
         try:
             reuse_context = reuse_context_path.read_text(encoding="utf-8")
+            files_read.append(str(reuse_context_path.relative_to(WORKSPACE)))
             if len(reuse_context) > 2400:
                 reuse_context = reuse_context[:2400].rstrip() + "\n... [truncated]"
             blocks.append("Reusable Project Trajectory Context:")
@@ -114,11 +117,33 @@ def load_trajectory_prompt_context(proj_dir: Path, n: int = 3) -> str:
         return "\n\n".join(blocks)
     try:
         logger = TrajectoryLogger(proj_dir)
+        files_read.append(str((proj_dir / "trajectory_memory.jsonl").relative_to(WORKSPACE)))
+        recent_records = logger.get_recent_records(n=n)
         context = logger.get_recent_context(n=n)
         if len(context) > 2400:
             context = context[:2400].rstrip() + "\n... [truncated]"
         blocks.append("Current Project Trajectory Memory:")
         blocks.append(context)
+        retrieval_record = logger.log_memory_retrieval(
+            requester_phase="Session_Restore",
+            files_read=files_read,
+            records_returned=len(recent_records),
+            query={"recent_n": n, "project": proj_dir.name},
+            observation=(
+                f"Restored prompt context from {len(files_read)} memory source(s) "
+                f"and {len(recent_records)} recent trajectory record(s)."
+            ),
+            reflection="Session restore memory retrieval is now visible as a trajectory step.",
+        )
+        blocks.append("Memory Retrieval Step Logged:")
+        if format_memory_check_card is not None:
+            blocks.append(format_memory_check_card(retrieval_record))
+        else:
+            blocks.append(
+                f"{retrieval_record['phase']} step={retrieval_record['step']} "
+                f"action={retrieval_record['action']['tool_name']} "
+                f"files={retrieval_record['action']['parameters']['files_read']}"
+            )
         return "\n\n".join(blocks)
     except Exception as exc:
         blocks.append(f"Trajectory Memory: unavailable ({exc}).")
