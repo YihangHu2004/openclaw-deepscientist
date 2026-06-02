@@ -1,0 +1,173 @@
+{
+  "schema_version": 1,
+  "project": "llm-data-creation",
+  "next_ev_id": 16,
+  "items": [
+    {
+      "id": "EV-001",
+      "source": "No.12 (local PDF, EMNLP 2023)",
+      "type": "finding",
+      "claim": "LLM可作为统一数据生成器，仅需一个格式化示例即可批量生成训练数据",
+      "span": "unified data creation pipeline that requires only a single formatting example",
+      "location": "No.12.pdf abstract",
+      "source_type": "full_text",
+      "confidence": "high",
+      "audit_result": "faithful"
+    },
+    {
+      "id": "EV-002",
+      "source": "No.12 (local PDF, EMNLP 2023)",
+      "type": "finding",
+      "claim": "生成数据训练的模型在OOD任务上最高超越人类标注数据17.5%",
+      "span": "by up to 17.5% on out-of-distribution evaluation",
+      "location": "No.12.pdf abstract",
+      "source_type": "full_text",
+      "confidence": "high",
+      "audit_result": "faithful"
+    },
+    {
+      "id": "EV-003",
+      "source": "No.12 (local PDF, EMNLP 2023)",
+      "type": "finding",
+      "claim": "不需要领域内无标注样本，也不需要标签语义化prompt",
+      "span": "does not need in-domain unlabeled examples or data-specific label-descriptive prompts",
+      "location": "No.12.pdf section 3",
+      "source_type": "full_text",
+      "confidence": "high",
+      "audit_result": "faithful"
+    },
+    {
+      "id": "EV-004",
+      "source": "2506.12158 (arXiv, EMNLP 2025)",
+      "type": "finding",
+      "claim": "生成策略组合（如目标语言demonstration + LLM self-revision）可将合成数据与真实数据的差距缩小到5%以内",
+      "span": "narrowing the gap with real data to as little as 5% in some settings",
+      "location": "arXiv:2506.12158 abstract",
+      "source_type": "abstract_only",
+      "confidence": "medium",
+      "audit_result": "drifted",
+      "drift_note": "claim声称'生成策略组合'，但原文只提到'smart prompting techniques'，未明确说组合策略；且5%是'某些场景'的结果，claim未标注限定条件"
+    },
+    {
+      "id": "EV-005",
+      "source": "2506.12158 (arXiv, EMNLP 2025)",
+      "type": "finding",
+      "claim": "巧妙prompt技巧可减少对更大LLM的依赖，使小模型也能高效生成合成数据",
+      "span": "smart prompting techniques can reduce the advantage of larger LLMs, highlighting efficient generation strategies",
+      "location": "arXiv:2506.12158 abstract",
+      "source_type": "abstract_only",
+      "confidence": "medium",
+      "audit_result": "faithful"
+    },
+    {
+      "id": "EV-006",
+      "source": "2605.21812 (arXiv, Airbnb 2026)",
+      "type": "finding",
+      "claim": "Airbnb使用LLM生成合成查询和标签，解决搜索冷启动问题，实现冷启动到温启动的转变",
+      "span": "framework for generating synthetic queries and labels using LLMs, powering model training for Airbnb search",
+      "location": "arXiv:2605.21812 abstract",
+      "source_type": "abstract_only",
+      "confidence": "medium",
+      "audit_result": "faithful"
+    },
+    {
+      "id": "EV-007",
+      "source": "2605.21812 (arXiv, Airbnb 2026)",
+      "type": "finding",
+      "claim": "种子引导方法Query KL散度0.66 vs真实用户，InPars基线为12.03（7.5倍改进）",
+      "span": "our seed-guided approach achieves 0.66 KL divergence vs real users, a 7.5x improvement over InPars baseline",
+      "location": "arXiv:2605.21812 abstract",
+      "source_type": "abstract_only",
+      "confidence": "medium",
+      "audit_result": "faithful"
+    },
+    {
+      "id": "EV-008",
+      "source": "2605.21812 (arXiv, Airbnb 2026)",
+      "type": "finding",
+      "claim": "Virtual Judge (VJ) labeling实现更广泛的标签覆盖",
+      "span": "Virtual Judge (VJ) labeling for broader coverage",
+      "location": "arXiv:2605.21812 abstract",
+      "source_type": "abstract_only",
+      "confidence": "medium",
+      "audit_result": "faithful"
+    },
+    {
+      "id": "EV-009",
+      "source": "No.12 (local PDF, EMNLP 2023)",
+      "type": "finding",
+      "claim": "迭代式自引用生成（self-referential）通过采样新生成的样本作为下一轮prompt seed实现多样化",
+      "span": "iteratively samples from the pool of newly created examples to seed the prompt for the next round of generation",
+      "location": "No.12.pdf section 3.4",
+      "source_type": "full_text",
+      "confidence": "high",
+      "audit_result": "faithful"
+    },
+    {
+      "id": "EV-010",
+      "source": "No.12 (local PDF, EMNLP 2023)",
+      "type": "finding",
+      "claim": "4种自引用策略（Random/Contrastive/Similar/Tree）实现有控多样化",
+      "span": "4 distinct instantiations of self-reference including random, contrastive, similar, and tree sampling",
+      "location": "No.12.pdf section 3.4",
+      "source_type": "full_text",
+      "confidence": "high",
+      "audit_result": "faithful"
+    },
+    {
+      "id": "EV-011",
+      "source": "2605.21812 (arXiv, Airbnb 2026)",
+      "type": "finding",
+      "claim": "合成数据训练的评估集比无种子基线更具区分度（79% vs 97%配对准确率）",
+      "span": "79% vs 97% pairwise accuracy - harder evaluation examples",
+      "location": "arXiv:2605.21812 abstract",
+      "source_type": "abstract_only",
+      "confidence": "medium",
+      "audit_result": "faithful"
+    },
+    {
+      "id": "EV-012",
+      "source": "2605.21812 (arXiv, Airbnb 2026)",
+      "type": "finding",
+      "claim": "结合对比listing pairs与种子查询，平衡真实感与多样性",
+      "span": "combine contrastive listing pairs from booking sessions with seed queries to balance realism and diversity",
+      "location": "arXiv:2605.21812 abstract",
+      "source_type": "abstract_only",
+      "confidence": "medium",
+      "audit_result": "faithful"
+    },
+    {
+      "id": "EV-013",
+      "source": "2506.12158 (arXiv, EMNLP 2025)",
+      "type": "finding",
+      "claim": "跨越11种类型多样化的低资源语言，包括极低资源语言，评估3个NLP任务和4个开源LLM",
+      "span": "across 11 typologically diverse languages, including several extremely low-resource ones, using 3 NLP tasks and 4 open-source LLMs",
+      "location": "arXiv:2506.12158 abstract",
+      "source_type": "abstract_only",
+      "confidence": "medium",
+      "audit_result": "faithful"
+    },
+    {
+      "id": "EV-014",
+      "source": "No.12 (local PDF, EMNLP 2023)",
+      "type": "finding",
+      "claim": "标签空间空洞（yes/no等无语义标签）场景同样适用该pipeline",
+      "span": "tasks with semantically void label spaces",
+      "location": "No.12.pdf abstract",
+      "source_type": "full_text",
+      "confidence": "high",
+      "audit_result": "faithful"
+    },
+    {
+      "id": "EV-015",
+      "source": "2506.12158 (arXiv, EMNLP 2025)",
+      "type": "finding",
+      "claim": "demonstration、label-based summaries、self-revision等生成策略的比较研究尚缺乏",
+      "span": "a comparison of various generation strategies for low-resource language settings is lacking",
+      "location": "arXiv:2506.12158 abstract",
+      "source_type": "abstract_only",
+      "confidence": "medium",
+      "audit_result": "faithful"
+    }
+  ]
+}
