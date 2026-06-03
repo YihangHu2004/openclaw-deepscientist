@@ -53,6 +53,80 @@ DeepClaw Agent 生成的证据文件，包含：
 
 ### deepseek_evidence.json
 普通大模型（DeepSeek）直接阅读论文后生成的证据文件，无证据链约束。
+- `audit_result`: 审计结果（faithful/drifted/unsupported），由 **deepseek** 大模型审计判定
+- `auditor`: 审计员名称（deepseek）
+- `audit_method`: 审计方法（llm-judge）
+
+## 脚本使用
+
+### LLM 审计脚本（llm_audit.py）
+
+使用 DeepSeek 大模型批量审计 `deepseek_evidence.json` 文件中的 claim 忠实度。
+
+**前置条件：**
+```bash
+export DEEPSEEK_API_KEY=your_api_key
+```
+
+**基本用法：**
+```bash
+# 审计所有论文文件夹
+python scripts/llm_audit.py --base-dir example_contrast
+
+# 干跑模式（不调用API，只显示待审计项）
+python scripts/llm_audit.py --base-dir example_contrast --dry-run
+
+# 指定特定文件夹
+python scripts/llm_audit.py --base-dir example_contrast/lima-alignment
+
+# 自定义审计员名称
+python scripts/llm_audit.py --base-dir example_contrast --auditor deepseek-v4
+```
+
+**审计结果判定标准：**
+
+| 判定 | 含义 | 判断依据 |
+|------|------|---------|
+| faithful（忠实） | claim 与 original_text 语义完全一致 | 逐字引用准确 |
+| drifted（偏移） | claim 与 original_text 语义有偏差 | 省略关键词、扩大/缩小范围 |
+| unsupported（无根据） | claim 无法从 original_text 验证 | 无对应原文或超出范围 |
+
+**输出示例：**
+```
+Found 5 evidence files:
+  - example_contrast/lima-alignment/deepseek_evidence.json
+  - example_contrast/llm-data-creation/deepseek_evidence.json
+  ...
+
+Auditing: example_contrast/lima-alignment/deepseek_evidence.json
+  Found 16 evidence items
+  Auditing EV-001...-> faithful
+  Auditing EV-005...-> drifted
+  ...
+
+  Summary:
+    faithful:     14
+    drifted:      2
+    unsupported:  0
+  Hallucination rate: 12.50%
+```
+
+### 幻觉率分析脚本（hallucination_check.py）
+
+批量分析并统计幻觉率。
+
+```bash
+cd example_contrast
+python hallucination_check.py
+```
+
+### 可视化脚本（hallucination_visualize.py）
+
+生成对比柱状图和饼图。
+
+```bash
+python hallucination_visualize.py
+```
 
 ## 运行方法
 
