@@ -2,7 +2,9 @@
 
 **触发**：找领域高引论文；追踪引用链；查作者完整列表；补充 arXiv 滞后的文献。
 
-**基础 URL**：`https://api.semanticscholar.org/graph/v1`（从 USER_CONFIG.md 读取 API Key）
+**调用方式（优先级）**：
+1. **MCP 工具**（`semantic-scholar` server）— 优先使用，内置速率控制和 429 自动重试
+2. **web_fetch 降级**：MCP 不可用时改用 `web_fetch https://api.semanticscholar.org/graph/v1/...`
 
 ---
 
@@ -13,19 +15,19 @@ Before executing this skill, follow `skills/trajectory-memory/SKILL.md`: read
 After meaningful citation-network, author, or paper lookup actions, append a
 `S2_SemanticScholar` trajectory record. Do not treat trajectory memory as evidence.
 
-## 端点速查
+## MCP 工具速查
 
-| 功能 | 端点 |
-|------|------|
-| 关键词搜索 | `/paper/search?query={kw}&fields=title,authors,year,citationCount,abstract,externalIds&limit=20` |
-| 论文详情 | `/paper/arXiv:{id}?fields=title,abstract,authors,year,citationCount,references,citations` |
-| 谁引用了它 | `/paper/{pid}/citations?fields=title,authors,year,citationCount&limit=50` |
-| 它引用了谁 | `/paper/{pid}/references?fields=title,authors,year,citationCount&limit=50` |
-| 作者论文 | `/author/{aid}/papers?fields=title,year,citationCount&limit=50&sort=citationCount` |
+| 功能 | MCP 调用 | 降级 web_fetch 端点 |
+|------|---------|-------------------|
+| 关键词搜索 | `search_papers(query="{kw}", limit=20)` | `/paper/search?query={kw}&fields=...&limit=20` |
+| 论文详情 | `get_paper(paper_id="{arXiv_id}")` | `/paper/arXiv:{id}?fields=...` |
+| 谁引用了它 | `get_citations(paper_id="{id}", limit=50)` | `/paper/{pid}/citations?fields=...&limit=50` |
+| 它引用了谁 | `get_references(paper_id="{id}", limit=50)` | `/paper/{pid}/references?fields=...&limit=50` |
+| 作者论文 | `get_author_papers(author_id="{aid}")` | `/author/{aid}/papers?fields=...&limit=50` |
 
-**⚠️ 速率限制**：无 API Key 时匿名配额低（每 5 分钟约 100 次）。
-429 处理：等待 15 秒重试；仍失败改用 `web_search "site:semanticscholar.org {关键词}"`。
-建议申请免费 Key：https://api.semanticscholar.org/api-docs/
+**⚠️ 速率限制**：MCP server 内置速率控制（无 Key 时 3 秒间隔，有 Key 时 1.1 秒间隔）和 429 自动重试（等 20 秒重试一次）。
+仍失败：改用 `web_search "site:semanticscholar.org {关键词}"`。
+API Key 配置：`~/.openclaw/openclaw.json` → `mcp.servers.semantic-scholar.env.SEMANTIC_SCHOLAR_API_KEY`。
 
 ---
 
