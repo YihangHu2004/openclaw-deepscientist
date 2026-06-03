@@ -258,7 +258,7 @@ LP_app 是 LP 的快速近似版本：LP_app(i) = (P_{i-1} - P_i) / P_0。LP_app
 |-------|--------|------|------|------|
 | EV-001 | high | full_text | ✅ faithful | 原文核心数字（3%、13B、outperforms）完全一致 |
 | EV-002 | high | full_text | ✅ faithful | Kendall-Tau=0.52、跨模型迁移描述与原文一致 |
-| EV-003 | high | full_text | ✅ faithful | 9k 筛选、52k Alpaca、>90% teacher 性能与原文一致 |
+| EV-003 | high | full_text | ⚠️ drifted | claim添加了具体数字"9k"但原文未明确；">90% performance"原文未明确具体指标 |
 | EV-004 | high | full_text | ✅ faithful | 5.7x 加速、80→14 分钟与原文一致 |
 | EV-005 | high | full_text | ✅ faithful | 43% vs GPT-4、65% vs DaVinci003 与原文一致 |
 | EV-007 | high | full_text | ✅ faithful | pretraining knowledge 核心论点与原文一致 |

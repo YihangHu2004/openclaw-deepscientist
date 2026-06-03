@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "project": "multi-task-pretraining",
-  "next_ev_id": 9,
+  "next_ev_id": 15,
   "items": [
     {
       "ev_id": "EV-001",
@@ -114,6 +114,90 @@
       "confidence": "high",
       "audit_result": "faithful",
       "added_at": "2026-06-01T15:19:48.746033+00:00"
+    },
+    {
+      "ev_id": "EV-009",
+      "paper_id": "2005.14165",
+      "cache_key": "",
+      "original_text": "scaling up language models greatly improves task-agnostic, few-shot performance, sometimes even reaching competitiveness with prior state-of-the-art fine-tuning approaches",
+      "source_type": "abstract_only",
+      "claim_text": "GPT-3 (175B) shows that scaling up LM improves few-shot performance",
+      "claim_location": "",
+      "stage_added": 3,
+      "verified": true,
+      "confidence": "medium",
+      "audit_result": "faithful",
+      "added_at": "2026-06-02T14:47:53.128220+00:00"
+    },
+    {
+      "ev_id": "EV-010",
+      "paper_id": "2005.14165",
+      "cache_key": "",
+      "original_text": "For all tasks, GPT-3 is applied without any gradient updates or fine-tuning, with tasks and few-shot demonstrations specified purely via text interaction with the model.",
+      "source_type": "abstract_only",
+      "claim_text": "GPT-3 applies without gradient updates or fine-tuning, using only text interaction",
+      "claim_location": "",
+      "stage_added": 3,
+      "verified": true,
+      "confidence": "medium",
+      "audit_result": "faithful",
+      "added_at": "2026-06-02T14:48:23.690046+00:00"
+    },
+    {
+      "ev_id": "EV-011",
+      "paper_id": "2002.09402",
+      "cache_key": "",
+      "original_text": "Feedback Transformer architecture exposes all previous representations to all future representations, meaning the lowest representation of the current timestep is formed from the highest-level abstract representation of the past.",
+      "source_type": "abstract_only",
+      "claim_text": "Feedback Transformer exposes all previous representations to future, enabling shallow models to outperform comparable Transformers",
+      "claim_location": "",
+      "stage_added": 3,
+      "verified": true,
+      "confidence": "medium",
+      "audit_result": "faithful",
+      "added_at": "2026-06-02T14:49:04.521262+00:00"
+    },
+    {
+      "ev_id": "EV-012",
+      "paper_id": "1911.03179",
+      "cache_key": "",
+      "original_text": "even with residual connection and layer normalization, deep Transformers still have difficulty in training, and particularly Transformer models with more than 12 encoder/decoder layers fail to converge",
+      "source_type": "abstract_only",
+      "claim_text": "Deep Transformers (>12 layers) fail to converge even with residual connections and layer normalization",
+      "claim_location": "",
+      "stage_added": 3,
+      "verified": true,
+      "confidence": "medium",
+      "audit_result": "faithful",
+      "added_at": "2026-06-02T14:49:27.427960+00:00"
+    },
+    {
+      "ev_id": "EV-013",
+      "paper_id": "2005.14165",
+      "cache_key": "",
+      "original_text": "GPT-3 trains an autoregressive language model with 175 billion parameters, 10x more than any previous non-sparse language model, and tests its performance in the few-shot setting.",
+      "source_type": "full_text",
+      "claim_text": "GPT-3 (175B parameters) is 10x larger than any previous non-sparse language model",
+      "claim_location": "",
+      "stage_added": 3,
+      "verified": true,
+      "confidence": "high",
+      "audit_result": "faithful",
+      "added_at": "2026-06-02T15:04:49.459505+00:00"
+    },
+    {
+      "ev_id": "EV-014",
+      "paper_id": "2005.14165",
+      "cache_key": "",
+      "original_text": "During unsupervised pre-training, a language model develops a broad set of skills and pattern recognition abilities. It then uses these abilities at inference time to rapidly adapt to or recognize the desired task. We use the term in-context learning to describe the inner loop of this process.",
+      "source_type": "full_text",
+      "claim_text": "GPT-3 uses in-context learning - skills developed during pre-training are applied at inference time via text interaction",
+      "claim_location": "",
+      "stage_added": 3,
+      "verified": true,
+      "confidence": "high",
+      "audit_result": "faithful",
+      "added_at": "2026-06-02T15:05:00.656873+00:00"
     }
   ]
 }
