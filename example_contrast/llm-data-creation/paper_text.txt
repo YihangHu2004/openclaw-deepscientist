@@ -1,0 +1,1266 @@
+Making Large Language Models Better Data Creators
+Dong-HoLee1, JayPujara1, MohitSewak2, RyenW.White2, SujayKumarJauhar2
+∗
+1InformationSciencesInstitute,UniversityofSouthernCalifornia
+2MicrosoftResearch
+{dongho.lee}@usc.edu,{jpujara}@isi.edu,{mohit.sewak,ryenw,sjauhar}@microsoft.com
+Abstract (a) GPT as Labeler
+Has the UK been hit
+Althoughlargelanguagemodels(LLMs)have by a hurricane? Yes
+advanced the state-of-the-art in NLP signifi- Unlabeled Input LLM Output
+Instances
+cantly,deployingthemfordownstreamappli-
+(b) GPT as Generator
+cationsisstillchallengingduetocost,respon- Generate ‘Input’
+where the label is yes
+siveness,control,orconcernsaroundprivacy Has the UK been hit
+Yes
+by a hurricane?
+and security. As such, trainable models are
+Output LLM Input
+stillthepreferredoptioninsomecases. How-
+(c) GPT with Single-formatting Example
+ever,thesemodelsstillrequirehuman-labeled Question: Does France
+have a Prime Minister?
+data for optimal performance, which is ex- Option: [yes, no]
+pensiveandtime-consumingtoobtain. Inor- Answer: yes
+der to address this issue, several techniques Question: Has the UK
+to reduce human effort involve labeling or b O e p e t n i o h n it : [ b y y e s a , h n u o r ] ricane? Question: Have the San
+generatingdatausingLLMs. Althoughthese Answer: yes Jose Sharks won a
+LLM Stanley Cup?
+methodsareeffectiveforcertainapplications, Input / Output Option: [yes, no]
+in practice they encounter difficulties in real- (Single-formatting Example) Answer: yes
+worldscenarios. Labelingdatarequirescare-
+ful data selection, while generating data ne-
+cessitatestask-specificpromptengineering. In
+thispaper,weproposeaunifieddatacreation
+pipelinethatrequiresonlyasingleformatting
+example, and which is applicable to a broad
+range of tasks, including traditionally prob-
+lematic ones with semantically devoid label
+spaces.Inourexperimentswedemonstratethat
+instruction-following LLMs are highly cost-
+effectivedatacreators,andthatmodelstrained
+withthesedataexhibitperformancebetterthan
+thosetrainedwithhuman-labeleddata(byupto
+17.5%)onout-of-distributionevaluation,while
+maintaining comparable performance on in-
+distributiontasks. Theseresultshaveimportant
+implicationsfortherobustnessofNLPsystems
+deployedinthereal-world.
+1 Introduction
+Large language models (LLMs) have revolution-
+ized the field of NLP, yielding impressive perfor-
+mance on various conventional natural language
+understanding(NLU)andgeneration(NLG)tasks.
+They are able to do this with only a handful (i.e.,
+few-shot)orsometimesevennotrainingexamples
+(i.e.,zero-shot)(Brownetal.,2020;Duetal.,2022;
+∗WorkdoneduringMicrosoftResearchInternship.
+Proceedingsofthe2023ConferenceonEmpiricalMethodsinNaturalLanguageProcessing,pages15349–15360
+December6-10,2023©2023AssociationforComputationalLinguistics
+…
+Following ‘example’ to
+generate diverse examples
+Figure1: ExistingLLM-baseddataaugmentationneeds
+unlabeledexamples(labeler)orlabel-specificprompts
+(generator),whileourframeworkgeneratesexamples
+foravarietyoftasksinaunifiedway.
+Raeetal.,2021;Thoppilanetal.,2022;Chowdhery
+etal.,2022). However,despitetheireffectiveness,
+thereisacontinueddemandforthedeploymentof
+smallertrainableortunablemodelsinreal-world
+scenariosduetocostconstraints,existingservice-
+level agreement response times, or privacy and
+security concerns around using black-box APIs.
+Unfortunately,application-specificcustommodels
+sometimes require large amounts of high-quality
+human-labeleddata,inordertoperformwell. Thus,
+in order to reduce time and cost in the model de-
+ploymentcycle,recentworkhasfocusedontrying
+toobtaintraining databyleveragingLLMsasei-
+therlabelerstoannotateunlabeleddata(Yooetal.,
+2021; Wang et al., 2021a; Lang et al., 2022), or
+generators to generate new data samples (Meng
+etal.,2022;Yeetal.,2022;Gaoetal.,2022).
+Despite initial successes, constraints for these
+techniquescontinuetohindertheirapplicabilityin
+broaderreal-worldsettings. First,inthecontextof
+usingLLMsaslabelers,itisessentialtohaveraw
+15349
+
+datathatcloselyresemblesthedistributionofdata yieldmultipleexamplesthatvaryincontentbutare
+inthepredictivetask. Mostpreviousresearchhas formatted uniformly (Section 3.1 3.2). Further-
+−
+assumed access to a training dataset from which more,asanefficientmeansofdiversifyingthegen-
+thelabelsareelided;however,forcold-startprob- erateddata,weproposea“self-reference”strategy,
+lemsinthereal-world,nosuchassumptionscanbe whichiterativelysamplesfromthepoolofnewly
+made. Curating raw data for tasks in specialized created examples to seed the prompt for the next
+domains,suchasthoseinthebiomedicalorlegal roundofgeneration(Section3.4). Specifically,we
+fields,canbeparticularlychallenging. Conversely, outline4distinctinstantiationsof“self-reference”
+samplingalargevolumeofdataatrandomcanre- includingrandom,contrastive,similar,andtree
+sultinanimbalancedlabeldistributionduetorare samplingforcontrolleddiversificationofdata.
+events(Markovetal.,2022).
+Weevaluateourdatacreationpipelineonabat-
+Meanwhile, leveraging LLMs as generators
+teryoftestsinvolvingthreedistincttypesoftasks,
+requires careful curation of few-shot exam-
+namelymultiple-choicequestionanswering(QA),
+ples (Hartvigsen et al., 2022), or composition of
+open-bookyes/noQA,andclosed-bookyes/noQA.
+promptsthathighlightthesemanticmeaningofla-
+Thedatasetsforthesetasksrangeacrossavariety
+bels (Wang et al., 2021b; Meng et al., 2022; Ye
+ofdomains,includingspecializedonessuchasthe
+et al., 2022; Gao et al., 2022), such as positive v.
+biomedical domain. Furthermore, for each cate-
+negativeinsentimentclassification. Thelatterhas
+gory of task, we use a minimum of two datasets
+been a bottleneck to the broader applicability of
+inordertocomparetheout-of-distribution(OOD)
+LLMs as generators, however, since not all tasks
+generalizationofmodelsusingoriginaldatatosyn-
+havelabelsthataresemanticallymeaningful,orare
+theticallygeneratedLLMdata. Ourresultsdemon-
+enumerable. Consider, for example the label yes
+stratethatleveragingLLMsasgeneratorsusingour
+v. no,whichhavenomeaningwhentakenwithout
+formatting-basedcreationapproachisahighlycost-
+context; or the options of a multiple choice QA
+effectivewayofcreatingdatathatcanbeeffectively
+(seeFigure1),whichareaneffectivelyopen-ended
+used to train models for a variety of downstream
+label-setthatvariesfrominstancetoinstance. For
+tasks,includingthoseinspecializeddomains,and
+thesekindsofproblemsLLMsasgeneratorscon-
+oneswherelabelsaredevoidofsemanticmeaning
+tinuetobeinadequate.
+or vary across the data. For in-distribution (ID)
+In this paper, we first present a formal frame- settings,naturallyhavingaccesstolargeamounts
+work for characterizing different approaches for ofhigh-qualitymanuallycuratedandlabeleddata
+LLMdatacreation. Specifically,weusegraphical isstillideal. However,whenonlyasmallamount
+modelsasawaytocharacterizeandunifydisparate of human-labeled data is available, our approach
+approachesthatincludeLLMsaseitherlabelersor yieldsresultsthatareoftencomparable,andsome-
+generators(Section2). Next,weproposeanovel times even better than the original datasets. This
+datacreationpipelinethatonlyrequiresasinglefor- highlightsthepotentialroleLLMscanplayinthe
+mattingexampletogenerateheterogeneouslabeled modeldevelopmentcycle,especiallyinresource-
+dataforvariousdownstreamapplications,includ- poororspecializeddomains. Further,fortheOOD
+ingthosethatfocusonspecializeddomains. Incon- settings,modelstrainedondatageneratedbyour
+trasttocurrentmethodsthatrequiredataset-specific pipelineconsistently,andbylargemargins,outper-
+components(e.g.,labeldescription,exampleselec- formtheircounterpartstrainedondatafromhuman
+tion),ourpipelineservesasaunifiedsolutionthat sources. Thisrobustnessandgeneralizabilityhas
+can be applied to a wide range of tasks, includ- importantimplicationsforthedeploymentofreal-
+ingthosewherethelabelsetiseithersemantically worldsystemsthatdealwithdatathatarevariable,
+devoidofmeaning,orunenumerable. chaoticandoftenverydifferentfromcuratedaca-
+Our data creation pipeline leverages an demic datasets. We are realeasing our code and
+instruction-followingLLMasageneratorincon- promptstothecommunitytospurfutureresearch
+junction with a single formatting example as a
+inthearea1.
+simple yet effective way of imposing structured
+constraints. Specifically,ourapproachiteratively
+conditions the generator on an instruction and a
+unique formatting example in a JSON format to 1https://github.com/microsoft/llm-data-creation
+15350
+
+2 FormalizationofLLM-baseddata
+(a) Labeler
+creation
+(𝒙,𝒚) 𝒆
+" " "
+∈𝐷
+#
+In this section, we attempt to draw different data
+creationstrategiesusingLLMsintoaunifiedframe-
+work,anddiscussrelatedresearchusingthisframe- 𝒙 𝑀 𝒚
+!
+work. ∈𝐷 $
+(b) Generator
+2.1 LLM-baseddatacreation
+Assume a large language model (e.g., GPT- 𝑊 𝒚 𝒙 !
+M ∈𝐷
+3)thathasbeenpre-trainedtomaximizethelike- $
+lihood of generating each token in a sequence
+x = [x ,x ,...,x ]byconditioningonprevious 𝒚 𝑀 𝒙
+1 2 n
+tokens. Then, iscapableofgeneratingnewtext
+M
+throughrecursivesamplingoftokensfromitsout-
+Figure 2: Graphical models for using LLM as
+put probability distribution. Given such a model M
+(a) labeler which outputs label y for unlabeled data
+andlabelspace ,thegoalofdatacreationis x using instructive prompt or few-shot
+M Y u ∈ D U W y
+toinducesamples(x,y)wherey . Basedon examples(x ,y ) withorwithoutexplanatione ,
+l l L l
+∈ Y ∈D
+differentinstantiationsofthisgeneralframework, andas(b)generatorwhichgeneratesmultipledatax
+for label y with label-descriptive prompt or using
+other inputs may be included, such as a label de-
+W
+in-domainunlabeledexamplex .
+scriptive prompt y for each y , in-domain u ∈D U
+W ∈ Y
+unlabeled example x u U , or a small number have shown that curating diverse and representa-
+∈ D
+of example pairs (x l ,y l ) L along with their tivesamplesiscriticaltotheabilityofthemodel
+∈ D
+correspondingexplanatione l . tolabelnewsamples(Liuetal.,2022;Rubinetal.,
+2022; Su et al., 2022). This can be challenging,
+2.2 FormalFrameworkandRelatedWork
+particularlyinspecializeddomainssuchas,forex-
+Giventhesebasiccomponents,therearetwobroad ample, the legal or biomedical domain – where
+strategiesforLLMdatacreation,namelyusingan only a small number of samples may be curated.
+LLMasalabelerorasgenerator. Graphicalmod- Ourpaperproposesapipeline(Section3capableof
+els for each of these two strategies is presented tacklingthesechallenges,andisparticularlyuseful
+in Figure 2 to summarize the conditional interac- in resource-poor domains (Section 5.1). Further-
+tionsandindependenceassumptionsthatdescribe more,providingintermediatereasoningsteps(i.e.,
+therelationshipsbetweencommonframeworkcon- chains-of-thought) as explanations e in prompts
+l
+stituents. Therestofthissectiondiscussesexisting enablesbetterlabelinginbothfew-shot(Weietal.,
+workusingtheunifiedlanguageofthesegraphical 2022;Zhouetal.,2022;Lampinenetal.,2022)and
+models. zero-shotsetting(Kojimaetal.,2022).
+Using LLMs as labelers. can be used as a UsingLLMsasgenerators. Analtogetherdif-
+M
+labelerforunlabeleddata(SeeFigure2(a)). Here, ferent data creation approach uses the LLM
+M
+approachesassumethatunlabeleddata ispro- directly as generator (See Figure 2 (b)). While
+U
+D
+videdasinputandthedistributionof issimilar a labeler predicts y by conditioning on an input
+U
+D
+to the distribution for the target task. Labeling x, a generator does the reverse by generating x
+can be achieved either by conditioning on a given y. However, like with LLMs as labelers, a
+M
+fewlabeledexamples(x ,y ) (Brownetal., small number of relevant samples can be used to
+l l L
+∈ D
+2020; Yoo et al., 2021; Wang et al., 2021a; Lang condition forgeneratingdata. Hartvigsenetal.
+M
+etal.,2022),orbyleveraginginstructiveprompts (2022)feedshuman-curatedexamplesofthetarget
+W describingthetaskwithoutanylabeledexam- label(e.g.,implicithatespeech)into togenerate
+M
+ples (Brown et al., 2020). When providing the human-like examples for the target label. In con-
+model withasmallnumberoflabeledexamples trast, Wang et al. (2021b) conditions on both
+M M
+(x ,y ) , – often referred to as the few-shot in-domain unlabeled examples and target label y
+l l L
+∈ D
+setting(andcontrastedwiththezero-shot setting, togeneratedomain-relateddatafory. Meanwhile
+wherenoexamplesareprovided)–recentstudies a number of different efforts (Meng et al., 2022;
+15351
+
+Ours Instruction
+(𝒙 ,𝒚 ) - You are creating {number_of_examples} examples that
+" "
+follow the format of the example provided,
+but with a different content.
+- The created examples **must** all have different answers.
+- The output **must** be in unnumbered JSON format.
+𝑊 𝑀 (𝒙,𝒚)
+𝑰 - [fixed_only] The created examples **must** have
+the same options as the provided example.
+Figure3:FrameworkOverviewofexample-baseddata Table1: Instruction I usedinthepaper.
+W
+creation which outputs multiple complete data (x,y)
+startingwithaninitialseedformattingexample(x ,y ) 3 Example-basedDataCreation
+f f
+andtheinstruction .
+I
+W This paper proposes a unified data creation ap-
+proach using LLMs, which does not need in-
+Yeetal.,2022;Gaoetal.,2022)condition on
+M domain unlabeled examples x u U or data-
+in-domainunlabeledexampleandwell-formatted ∈ D
+specific label-descriptive prompts . As illus-
+descriptiveprompts y fortargetlabely togen- W y
+W trated in Figure 3, our framework iteratively cre-
+erate data. One important caveat with all these
+ates data beginning with a single initial for-
+approachesisthatthelabely,uponwhichoutputs D G
+matting example (x ,y ) and an instruction
+f f I
+areconditioned,needstobeinherentlymeaningful W
+(Section 3.1). The process begins by converting
+inorderforinstructionstobeformulatedinaway
+(x ,y )intoastructuredprompt (Section3.2-
+f f f
+thatpromptthemodel intogeneratingcoherent W
+outputs. For example, M when y is an entailement 3.3). Afterconditioning M on[ W I ; W f ]togener-
+ate data, we sample an instance from the pool of
+relationship, a corresponding prompt might
+y
+W newlycreateddatatoserveasformattingexample
+include “x . In other words...”; or when
+u U
+∈ D for the next iteration (Section 3.4). We continue
+y is the sentiment of a movie review, might
+y
+W toiterateinthismanneruntiltherequirednumber
+include“Themoviereviewis...”. Contrastthiswith
+of instances k is obtained, after discarding dupli-
+thescenariowhereyisanindexorbinaryresponse,
+cateandill-formatteddata. Thisisdonebycaching
+which has no semantic meaning without context
+dataandcheckingnewlycreatedcandidatesagainst
+andisthereforedifficulttoconditionon. Inthispa-
+previously generated ones for duplicates, and by
+per,wedeviseaunifiedapproachtotacklingthese
+using the python json.loads() method for veri-
+scenarios (Section 3), yielding a method for data
+fyingthevalidityofthejsonoutput. Theresulting
+creationthatisbroadlyapplicable.
+datacreationpipelineisgenerallysuitableformost
+classification tasks. Although, in this paper we
+specifically focus on tasks where the label set is
+Differences with Instruction-following Data
+potentiallyopen-ended(e.g.,multiple-choiceQA),
+Generation. Recentstudiesuse tocreatedata
+M or lacks inherent semantic meaning (e.g., binary
+for training instruction-following models (Wang
+QA)–problemspacesthathaveposedchallenges
+et al., 2023b; Taori et al., 2023; Xu et al., 2023;
+topastworkinLLMdatacreation.
+Chiangetal.,2023;Mukherjeeetal.,2023). Such
+studiesleverage asalabeler,producingacoher-
+M 3.1 Instruction
+entresponsey foragiveninstructionx. Themain
+focusisoncoveringawiderangeofinputsxand The goal of our framework is to have the model
+theircorrespondingresponsesy toencompassthe generate a diverse set of examples in the
+M
+diversityofinstructionspotentiallyencounteredin same format as the input formatting example
+real-world interactions with users. While recent (x ,y ). To ensure format consistency and ex-
+f f
+studies have indicated that such models trained ample diversity, we use the system instruction
+withauto-generatedinstruction-responsepairscan in Table 1. We generate data in batches of
+I
+W
+yieldlogicalandcoherentresponsestouserinstruc- {number_of_examples},notonlytoaccountfor
+tions, their performance on NLU tasks remains the token generation limits of LLMs, but also to
+sub-par(Wangetal.,2023a). Meanwhile,thefocus encourage content diversity through subsequent
+of our work is the generation of data specifically sampling of (Sec 3.4). In this paper, we set
+f
+W
+tailoredfornaturallanguageunderstanding(NLU) {number_of_examples} to 5 and do not vary it.
+taskswithafocusonaccurateresponses. Inordertomitigatelabelbias,weencouragemod-
+15352
+
+elstostriveformaximalvarianceintheirgenerated {
+responses, avoiding repetitions in data where the "Question": "I am black when you buy me, red when you
+use me. When I turn white, you know it's time
+answerisconsistently“yes”,forexample. to throw me away. What am I?",
+"Options": ["charcoal", "rose flower", "ink", "fruit", "shoe"],
+"Answer": "charcoal"
+3.2 FormattingExample
+}
+Theonlyassumedinputtoourexample-baseddata
+(a) Variant (multiple-choice QA)
+creation pipeline is a single formatting example
+{
+(x f ,y f )anditscorrespondinglabelspace . This “Options”: [“yes”, “no”, “maybe”],
+Y “Answer”: “yes”,
+exampleisformattedasaJSON-structuredprompt
+“Question”: “Is batman and robin a sequel to batman
+asshowninFigure4. Giventheone-shotJSON forever?”,
+f
+W “Context”: “With the box office success of Batman Forever
+structured format prompt, it is expected that the
+in June 1995, Warner Bros. immediately
+modelyieldsasyntacticallycorrectoutputthatcon- commissioned a sequel. …”
+}
+forms to the JSON schema. While generating a
+(b) Fixed (yes-no QA)
+complexstructuredoutputlikeJSONcanbechal-
+lenging,itseasyparsingactsasawaytovalidate
+Figure 4: Example of formatting example prompt
+outputsatcreationtimeandforeffectiveusagein
+where“options”containthelabelspace ofthe
+f
+trainingdownstreammodels. W task,“answer”containsy and“question”con Y tainsx .
+f f
+“Context”isoptionalanddependsonthetask.
+3.3 StructureofFormattingExample
+Recall that our focus in this paper is on data cre-
+fromtheoutputs(x ,y ) generated
+ation for tasks that are challenging because their atiterationi 1. We gi − ex 1 per g i i m − 1 ent ∈ w D ith Gi f − o 1 urdifferent
+outputlabelspaceisopen-ended,orbecausethey −
+samplingstrategies.
+lackinherentsemanticmeaning. Werefertothese
+distinctsettingsusingtheshorthandvariableand
+Randomselection. Duringeachiteration,afor-
+fixed, and note that the input formatting example
+mattingexampleforthenextstepisrandomlycho-
+(x ,y ) is different for each of these label space
+f f senfromtheoutputofthecurrentstep.
+settings. Specifically, the major difference is the
+orderofpresentationofpromptcomponents. Contrastiveselection. Foreachiteration,wese-
+lecttheexamplethatdisplaysthegreatestsemantic
+VariableOption. Thevariableoptionformatis
+contrast to the preceding formatting example. In
+structuredinalogicalsequencebeginningwiththe
+this approach, we use a pre-trained bidirectional-
+questionx ,followedbyalistofanswercandidates
+f encoder(ReimersandGurevych,2019)togenerate
+,andfinallythecorrectanswery .
+f embeddingsforexamples,andcomputethecosine
+Y
+similaritybetweenx andx ,selectingthein-
+Fixed Option. In contrast, for the variable op- f gi 1
+stancex withthelowestsi − milarity.
+tion, the expected format consists of the answer gi 1
+−
+candidates first,followedbythecorrectanswer
+Y Similar selection. This sampling approach
+y , and finally the question x . This inversion
+f f worksanalogouslytoContrastiveselection,except
+ofpromptcomponentsisaddedtoensurethatthe
+thatinsteadofselectingthex withthelowest
+auto-regressivemodelcreatesquestionswithpre- cosinesimilaritytox ,wesel g e i c − t 1 theonewiththe
+f
+determinedoptionssincethemodel,asafreegen-
+highestsimilarity.
+erator, can produce inconsistent output, resulting
+inansweroptions thatdonotbelongtothefixed Tree selection. Iterative sampling of data may
+Y
+pre-determinedset. resultinsignificantdomaindriftfromthefirstseed
+exampletodatageneratedinlaterstepsofthegen-
+3.4 Self-Reference
+erationpipeline,duetounexpectedcontentvaria-
+Relying on a single formatting example (x ,y ) tionsproducedbythemodel. Toavoidthisissue,
+f f
+as a reference point for all iterations of data cre- we use all the generated outputs from one step
+ationmaylimittheabilityofthepipelinetoyield as formatting examples for subsequent iterations.
+datathatisbroadcoverage,diverseandbalanced. Thisapproachcanbeviewedasabreadth-firsttree
+To overcome this, we propose “self-reference”, traversal over generated examples, and is in con-
+whereintheformattingexamplef = (x ,y )for trastwiththeotherthreesamplingapproachesthat
+i fi fi
+allsubsequentgenerationstepsi > 0aresampled useadepth-firstexplorationstrategy. Ourhypoth-
+15353
+
+esisisthattheminimumheightoftheexploration Task LabelSpace Domain Dataset
+treeyieldssamplesthataremoretopicallycoher- PIQA
+multiple-choiceQA Variant(2) Commonsense
+Winogrande
+ent.
+CommonsenseQA
+multiple-choiceQA Variant(5) Commonsense
+RiddleSense
+Knowledge BoolQ(w/context)
+4 ExperimentalSetup
+open-bookyes/no Fixed(2) Biomedical PubMedQA
+Biomedical BioASQ
+Inthissectionwedescribetheexperimentalsetup Knowledge BoolQ(w/ocontext)
+closed-bookyes/no Fixed(3) Knowledge StrategyQA
+that we use to evaluate our single-shot example- Knowledge CREAK
+baseddatacreationframework.
+Table 2: Datasets used in the paper. The numbers
+enclosedinparenthesesindicatethenumberoflabels
+4.1 Datasets withinthelabelspace.
+We evaluate on three types of different tasks:
+4.3 ImplementationDetails
+multiple-choice question answering (QA), open-
+bookyes/noQA,andclosed-bookyes/noQA–as Throughouttheentireprocessofdatacreation,we
+shown in Table 2. Multiple-choice QA is used use gpt-3.5-turbo language model, as of June
+evaluate our data creation pipeline in a variable 2023, with specific settings of temperature and
+labelspacesetting,whiletheothertasksareused top setto1. Whenconductingfine-tuningexperi-
+p
+for fixed label space settings. In order to demon- ments,weleveragetheAdamoptimizer(Kingma
+stratethedomaingeneralizationcapabilityofour andBa,2014)withamaximumsequencelengthof
+approach,weadditionallyuseaminimumoftwo 256. Ineachexperiment,weperformagridsearch
+datasets for each category of task. The datasets ondevelopmentdatafortheoptimallearningrate
+range broadly in the reasoning abilities they de- in [3e-4, 1e-4, 5e-5, 2e-5, 1e-5, 5e-6, 3e-6, 1e-6,
+mandfrommodels,requiringthemtosolvediverse 5e-7],andbatchsizein[4,8,16]. Allexperiments
+problemssuchasfillingintheblankinasentence areconductedonanRTXA5000withFP32.
+(PIQA(Bisketal.,2020),WinoGrande(Sakaguchi
+et al., 2021)), choosing the most suitable option 5 ExperimentalResults
+among multiple choices (CommonsenseQA (Tal-
+We conduct a comprehensive set of experiments
+moretal.,2019),RiddleSense(Linetal.,2021)),
+thatseektoevaluatetheeffectivenessofdatacre-
+comprehending a given passage to make a pre-
+ated by LLMs for focused downstream applica-
+diction (BoolQ with context (Clark et al., 2019),
+tionmodeling. Ourfirstevaluationinvolvesexam-
+PubMedQA (Jin et al., 2019), BioASQ (Tsatsa-
+ining the performance of models trained on data
+ronis et al., 2015)), and answering based on in-
+generated by variants of our single-shot data cre-
+herentknowledge(BoolQwithoutcontext(Clark
+ation pipeline and comparing them against man-
+et al., 2019), StrategyQA (Geva et al., 2021),
+ually curated training data. We investigate both
+CREAK(Onoeetal.,2021)). Detailsofthevarious
+in-distributed(ID)andout-of-distributiontestdata
+datasetsarepresentedinAppendixA.1.
+settings, each of which are explained in greater
+detailbelow.
+4.2 EvaluationDetails
+5.1 PerformanceComparison
+In order to demonstrate the efficacy of our data
+creation framework, we present a comparison of IDPerformance. IntheIDsettingthetestdata
+adownstreammodelwhenitistrainedon(1)the is drawn from the same distribution as the train-
+original train dataset denoted by ; and (2) an ingdata;specifically,aportionofthefullhuman-
+L
+D
+LLM created dataset, denoted by , where a sourceddatasetisheldoutasatestsettoevaluate
+G
+D
+single seed formatting example is randomly se- models trained on either human-labeled or LLM
+lected from . We are unable to conduct a createddata. Table3summarizestheperformance
+L
+D
+comparativeanalysiswithotherLLM-baseddata ofmodelstrainedontwotypesofdatasets: theorig-
+generation methods as they do not provide solu- inaldataset,denotedby ,anddatasetscreated
+L
+D
+tions or prompts engineered for the tasks listed usingthedifferent“self-reference”variantsofour
+in Table 2. The base model used in this paper is single-shot pipeline – the corresponding rows in
+RoBERTa-large(Liuetal.,2019). thetablemarkedas . Inbothsettings,andfora
+G
+D
+15354
+
+MCQA(2) MCQA(5) OpenYes/No ClosedYes/No
+Trainedon PIQA WinoGrande CommonsenseQA RiddleSense BoolQ PubMedQA BioASQ BoolQ StrategyQA CREAK
+↓
+#Examplesin 14,113 160 8,500 3,510 9,427 450 670 9,427 2,061 10,176
+D
+DL 80.95 51.41 68.17 56.48 85.62 55.20 87.14 65.68 49.56 81.19
+DG D
+D
+( G C
+G
+o
+D
+( n R
+( G S
+t a r
+i
+a n
+( m
+s
+T
+d t
+i
+o
+r
+i
+l
+v
+e
+m
+a
+e
+e r
+) )
+) )
+6
+6 6
+6 6
+7 8
+6 .
+. .
+. 1
+1 3
+2 5
+5 5
+0 5
+5 5
+5 2
+2 2
+1 .
+. .
+. 3
+8 0
+2 6
+1 5
+6
+4 4
+4 4
+8 7
+1 2
+. .
+. .
+5 6
+5 0
+0 2
+7 6
+4 4
+3 3
+2 2
+8 7
+. .
+. .
+2 0
+4 8
+6 9
+3 5 6
+6
+6
+6
+6
+9
+8
+9
+.
+.
+.
+.
+6
+6
+9
+6
+6
+0
+9
+6
+5
+6
+5
+6
+9
+0
+9
+1
+.
+.
+.
+.
+2
+6
+8
+6
+0
+0
+0
+0
+8
+8 8
+6 0
+3 5
+7 .
+. .
+. 7
+5 7
+1 1
+7 1
+4 5 6
+6 6
+2 1
+1 1
+. .
+. .
+2 2
+2 2
+3 8
+8 8 5
+5 4
+4 6
+3 9
+9 .
+. .
+. 5
+0 5
+5 2
+4 6
+6
+6
+6
+6
+7
+7
+9
+7
+2
+.
+.
+.
+.
+9
+2
+9
+7
+3
+4
+3
+4
+( DG- DL)/ DL − 18.43% +2.65% − 40.55% − 33.64% − 22.91% +10.38% − 1.66% − 7.18% +12.31% − 11.61%
+Table3: IDPerformance(Accuracy)comparisonbetweenmodelstrainedonoriginaltraindataset
+L
+(Firstgroup)
+D
+andLLM-createdtraindataset (Secondgroup). Theoptimalvariantfordata-creationinthesecondgroupis
+G
+D
+showninbold,andthesecondbestisunderlined. Thethirdgroupofthetablepresentsthepercentagedifference
+betweenthebestvariantinthesecondgroupandthefirstgroup.
+MCQA(2) MCQA(5) OpenYes/No ClosedYes/No
+Train PIQA WinoGrande CommonsenseQA RiddleSense BoolQ PubMedQA BioASQ PubMedQA StrategyQA CREAK
+Trainedon Test→ WinoGrande PIQA RiddleSense CommonsenseQA PubMedQA BoolQ PubMedQA BioASQ CREAK StrategyQA
+↓ →
+DL 52.05 44.65 41.51 40.93 62.80 58.65 67.14 56.20 49.27 48.69
+DG D
+D
+( G C
+G
+o
+D
+( n R
+( G S
+t a r
+i
+a n
+( m
+s
+T
+d t
+i
+o
+r
+i
+l
+v
+e
+m
+a
+e
+e r
+) )
+) )
+5 5
+5 4
+1 0
+0 8
+. .
+. .
+5 3
+3 4
+7 1
+1 2
+4
+4
+4
+5
+9
+9
+9
+2
+.
+.
+.
+.
+5
+5
+1
+2
+0
+5
+0
+5
+3 3
+4 4
+2 8
+3 0
+. .
+. .
+9 5
+4 0
+4 1
+2 9
+4
+4 4
+4 1
+3 2
+2 .
+. .
+. 3
+3 6
+3 3
+5 2
+5
+6 6
+5 5
+4 4
+9 9
+. .
+. .
+6 6
+0 0
+0 0
+0 0
+6
+5
+6
+5
+2
+9
+1
+5
+.
+.
+.
+.
+5
+8
+2
+7
+0
+7
+8
+7 7 6
+7 8
+5 6
+7 1
+. .
+. .
+0 4
+8 4
+0 2
+5 2 6 6
+5 5
+6 3
+5 9
+. .
+. .
+0 0
+2 4
+0 0
+0 0 4
+5 4
+4 9
+7 9
+9 .
+. .
+. 2
+7 2
+2 7
+2 7
+7
+5 5
+4 4
+4 1
+6 8
+. .
+. .
+7 3
+9 6
+8 0
+5 9
+( DG- DL)/ DL − 0.93% +14.54% +4.39% +5.58% +2.78% +6.16% +17.53% +14.84% +14.63% +11.11%
+Table4: OODPerformance(Accuracy)comparisonbetweenmodelstrainedonoriginaltraindataset
+L
+(First
+D
+group)andLLM-createdtraindataset (Secondgroup). ThebestdatasetforeachOODexperimentisshownin
+G
+D
+bold,andthesecondbestisunderlined. Thethirdgroupofthetablepresentsthepercentagedifferencebetweenthe
+bestvariantinthesecondgroupandthefirstgroup.
+giventask,thenumberofsamplesforeachdataset Specifically,sincewehaveusedatleasttwoeval-
+is identical. We also compute the percentage dif- uation datasets for each category of downstream
+ferentialbetweenthetwotypesofdatasets,shown application, we use one dataset for training and
+in the table as ( - )/ . These findings evaluate on a different dataset. Note that in this
+G L L
+D D D
+confirmthatwhilethereisnosubstituteforlarge setting,whilethetrainingdatacaneitherbemanu-
+amountsofhand-crafteddata,–demonstratedby allycurated(i.e. ),orgeneratedbyanLLM(i.e.
+L
+D
+dropsofupto 40.55%whenusingsynthetically ), the test dataset is always manually curated
+G
+− D
+created data – LLMs can play an important role (i.e.,originaltestdata). Table4presentsacompre-
+whenaccessisonlyavailabletoverylittledata,and hensiveanalysisoftheOODperformanceofmod-
+inspecializeddomains. Thisisdemonstratedbythe els trained on and . The results show that
+L G
+D D
+similaroroftenbetterperformanceof models modelstrainedonLLMdataareconsistentlyand
+G
+D
+onWinoGrande,PubMedQA,BioASQandStrate- sometimessignificantlybetteratOODpredictive
+gyQA.Meanwhile,acomparisonbetweendifferent performancethantheirhand-craftedcounterparts.
+“self-reference”samplingstrategiesdemonstrates Thishasimportantimplicationsfortherobustness
+the importance of mitigating domain drift in our andgeneralizabilityofreal-worldsystemsthatof-
+single-shotapproach,wherethesoletrueformat- ten deal with inputs that are very different from
+ting example is the only anchor point to the data carefullycuratedacademicdatasets. Wenotethat
+distributionweseektogenerate. TheTree-based a combination of human and LLM created data
+exploration strategy limits the semantic distance mayyieldevenhighergainsinOODperformance
+betweentheseedsampleandinstancescreatedlater andleaveacomprehensiveevaluationofthistofu-
+inthegenerationprocessandthereforeyieldhigher turework. Finally,acomparisonof“self-reference”
+performanceonIDdata. strategiesontheOODsettingshowsthatwhilethe
+Tree-based exploration approach is still a consis-
+OODPerformance. WhileIDdataisusefulto
+tently strong one, other sampling approaches are
+gaininsightsofasystemincontrolledsettings,real-
+sometimes comparable or better. This is under-
+worldapplicationsmustdealwithdatathatisoften
+standablesincesomedegreeofcontrollednoiseis
+farmorevariableandchaotic. Therefore,wecom-
+helpful,andcanbeviewedasaregularizer,when
+paremanuallycurateddata(i.e.,originaltraining
+tryingtogeneralizetoOODtestdata.
+data) to LLM generated data in an OOD setting.
+15355
+
+Accuracy on Riddlesense by each accumuulated data percentage Dataset #Train Random Diverse Similar Tree
+60
+Human
+PIQA 14,113 3.60 2.82 3.62 3.97
+50 Random
+Contrast WinoGrande 160 0.02 0.02 0.03 0.02
+40 Similar CommonsenseQA 8,500 2.73 2.71 2.77 1.73
+Tree RiddleSense 3,510 0.95 0.95 1.00 1.05
+30 BoolQ 9,427 5.13 2.24 4.95 4.2
+PUbMedQA 450 0.17 0.15 0.17 0.17
+20 BioASQ 670 0.24 0.23 0.33 0.22
+BoolQ 9,427 3.13 4.10 3.22 3.11
+10
+StrategyQA 2,061 0.66 0.70 0.81 0.66
+0 CREAK 10,176 3.24 3.20 4.14 3.50
+0-10% 0-20% 0-30% 0-40% 0-50% 0-60% 0-70% 0-80% 0-90% 0-100%
+Table5: APIUsageCost(USD)ofdatacreationstrat-
+Figure5: Performance(Accuracy)onRiddleSenseus-
+egy. The cost of utilizing API is calculated in USD,
+ingcumulativedatasplitsofthefulldata.
+based on the current pricing of gpt-3.5-turbo as of
+June2023,witharateof0.002USDper1Ktokens.The
+5.2 Distributionshiftduringcreation.
+cheapiststrategyisshowninbold.
+One natural question about the different “self-
+reference” strategies is whether the domain drift
+datacreationpipelineforeachdatasetinourevalu-
+thattheyinducefromiterativesamplingdetrimen-
+ationbenchmark. Theresultsdemonstratethatdata
+tally impacts samples generated later in the cre-
+creation with LLMs is highly cost-effective, and
+ation process. In other words does inclusion of
+costswellunder$5USDforeverysingledataset
+partsofthedatasetgeneratedlaterleadtoperfor-
+wecreated. Factoredinto thisisthecost fordata
+mancedropsorplateaus? Inordertoanswerthis
+rejected because it was duplicated or ill-formed.
+questionweperformanevaluationofcumulative
+Furthermore,ourTree-based“self-reference”strat-
+datasplitsononeofourbenchmarkdatasets(Rid-
+egy–whichwasthemostperformantonquantita-
+dlesense). Specifically we use incremental per-
+tiveanalyses–wasalsoamongthemoreeconom-
+centagesoftrainingdata–in10%blocks–forall
+icalones. Itwasthemosteconomicalonhalfthe
+humanlabeledandsyntheticallygenerateddatasets,
+datasets,whiletheContrastivestrategyincurred
+andevaluatetheperformanceofthesemodelson
+thelowestcostontheothers. Theseexpensesare
+the corresponding test set. The results of this ex-
+basedonthepricingofgpt-3.5-turbofromOpe-
+perimentareshowninFigure5.
+nAIasofJune2023.
+There are several interesting insights to be
+gained from these results. Firstly, using human-
+6 Conclusion
+labeleddataleadstomuchfasterconvergence;this
+makessensesincetheevaluationisperformedon
+In this paper, we have presented a formal frame-
+IDtestdata. RandomandContrastivesampling
+workfordatacreationusingLLMsandproposeda
+strategies–bothofwhichperformedlesswellon
+single-shotformattingexample-baseddatacreation
+our main evaluation – do exhibit drops in perfor-
+pipeline that leverages an instruction-following
+mance with later cumulative splits. Meanwhile,
+LLM. Specifically, we showed how multiple var-
+SimilarandTreeapproaches–whichwereconsis-
+iedexamplescanbegeneratedfromasingleseed
+tently better sampling strategies – demonstrate a
+example in a machine-friendly JSON format by
+steadyriseinperformancewithaddeddata. Jointly
+conditioningtheLLMonastructuredpromptcon-
+theseresultsindicatethatjudiciousselectionofex-
+sistingofinstructionsandaformattedexample. We
+amplesforsubsequentpromptsisneededtocounter
+furtherexpandthediversityoftheoutputbyintro-
+domaindrift. Lastly,thefinalupwardtrendofall
+ducinga“self-reference”mechanismthatselects
+datasets is meaningful because they indicate that
+formatting examples for subsequent iterations of
+modelstrainedonallthedatasetsdogenerallyben-
+generation from newly created data, and present
+efitfrommoredata. Whilethisadditionaldatais
+fourdifferentinstantiationsofthesamplingstrat-
+likelydifficultandexpensivetoobtainfromhuman
+egy. While prior efforts at LLM data creation in
+annotators,LLMscancreatearbitrarilymoredata
+theliteraturehaveavoideddomainswherethela-
+atafractionofthecost.
+belspaceisopen-endedandvariesfrominstance
+to instance, or is semantically devoid of inherent
+5.3 Datacreationcost
+meaning,ourstructuredpromptsareabletotackle
+Table 5 presents the expenses incurred by lever- both. Onabatteryofevaluationsourfindingsindi-
+aging an instruction-following LLM APIs in our catethatLLMscanactashighlycost-effectivedata
+15356
+
+generatorsforthedevelopmentofsmalltrainable herein are those of the authors and should not be
+ortunablemodelsindownstreamapplications. For interpretedasnecessarilyrepresentingtheofficial
+example,abudgetof$5USDisenoughtogenerate policies, either expressed or implied, of DARPA,
+2M tokens with gpt-3.5-turbo, and depending AROortheU.S.Government.
+onthetaskcanyieldseveralthousanddatasamples.
+Thesemodelsexhibitnoteworthypredictiveabili-
+References
+tiesingeneralizingtoout-of-distributiondata,akey
+desideratainreal-worldsystemswheredatacanbe YonatanBisk,RowanZellers,RonanLeBras,Jianfeng
+messy,variableandevolving. Theimpactofthese Gao,andYejinChoi.2020. Piqa: Reasoningabout
+physicalcommonsenseinnaturallanguage. InThirty-
+findingsaremeaningfulinanumberofenterprise
+FourthAAAIConferenceonArtificialIntelligence.
+scenarios, including for applications that require
+strictgovernanceonpredictivemodelsduetopri- Tom Brown, Benjamin Mann, Nick Ryder, Melanie
+vacyandsecurityconcerns,orduetoresponse-time Subbiah,JaredDKaplan,PrafullaDhariwal,Arvind
+Neelakantan,PranavShyam,GirishSastry,Amanda
+service-levelagreements,orindeedforsmallbusi-
+Askell,etal.2020. Languagemodelsarefew-shot
+nesses where human annotation costs, especially
+learners. Advancesinneuralinformationprocessing
+fromdomainexperts,canbeprohibitivelyhigh. systems,33:1877–1901.
+7 Limitation Wei-Lin Chiang, Zhuohan Li, Zi Lin, Ying Sheng,
+ZhanghaoWu,HaoZhang,LianminZheng,Siyuan
+Despite the capability of our pipeline to inte- Zhuang,YonghaoZhuang,JosephE.Gonzalez,Ion
+Stoica, and Eric P. Xing. 2023. Vicuna: An open-
+gratewithavarietyofotherinstruction-following
+sourcechatbotimpressinggpt-4with90%*chatgpt
+LLMs, our testing is restricted to ChatGPT (i.e.,
+quality.
+gpt-3.5-turbo) due to performance bottlenecks
+AakankshaChowdhery,SharanNarang,JacobDevlin,
+and time-out issues with LLM APIs in general.
+Maarten Bosma, Gaurav Mishra, Adam Roberts,
+While we also experimented with several recent
+Paul Barham, Hyung Won Chung, Charles Sutton,
+open-sourceinstruction-followingmodelsthatdis- Sebastian Gehrmann, et al. 2022. Palm: Scaling
+tillChatGPTresponses,theirabilitiestogenerate language modeling with pathways. arXiv preprint
+well-formattedJSONandcomprehendinstructions arXiv:2204.02311.
+were limited. We expect that the integration of
+Christopher Clark, Kenton Lee, Ming-Wei Chang,
+ourpipelinewithotheropen-sourceLLMswillbe Tom Kwiatkowski, Michael Collins, and Kristina
+possible in time, as the open-source community Toutanova.2019. BoolQ:Exploringthesurprising
+difficultyofnaturalyes/noquestions. InProceedings
+attainsaperformancestandardcommensuratewith
+ofthe2019ConferenceoftheNorthAmericanChap-
+commercialproducts.
+teroftheAssociationforComputationalLinguistics:
+An important consideration in our single-shot HumanLanguageTechnologies,Volume1(Longand
+example-baseddatacreationpipelineistheselec- ShortPapers),pages2924–2936,Minneapolis,Min-
+tionoftheinitialseedformattingsample. Wedid nesota.AssociationforComputationalLinguistics.
+notperformanexhaustiveanalysistounderstand
+NanDu,YanpingHuang,AndrewMDai,SimonTong,
+the impact of this seed selection on data creation Dmitry Lepikhin, Yuanzhong Xu, Maxim Krikun,
+quality,againduetoperformancebottleneckswith YanqiZhou,AdamsWeiYu,OrhanFirat,etal.2022.
+Glam: Efficient scaling of language models with
+LLMAPIs. Whileweselectthisseedatrandomin
+mixture-of-experts. InInternationalConferenceon
+thispaper,itispossiblethatamorecarefullycon-
+MachineLearning,pages5547–5569.PMLR.
+sidered approach for crafting or selection of this
+examplemayyieldbetterresults. JiahuiGao,RenjiePi,LINYong,HangXu,Jiacheng
+Ye, Zhiyong Wu, WEIZHONG ZHANG, Xiaodan
+Liang,ZhenguoLi,andLingpengKong.2022. Self-
+8 Acknowledgement
+guidednoise-freedatagenerationforefficientzero-
+shotlearning. InTheEleventhInternationalConfer-
+ThisworkwasfundedinpartbytheDefenseAd-
+enceonLearningRepresentations.
+vanced Research Projects Agency (DARPA) and
+ArmyResearchOffice(ARO)underContractNo. MorGeva,DanielKhashabi,EladSegal,TusharKhot,
+N660011924033, Contract No. W911NF-21-C- DanRoth,andJonathanBerant.2021. Didaristotle
+usealaptop? aquestionansweringbenchmarkwith
+0002andContractNo. HR00112390061,andwith
+implicit reasoning strategies. Transactions of the
+support from the Keston Exploratory Research
+Association for Computational Linguistics, 9:346–
+Award. The views and conclusions contained 361.
+15357
+
+Thomas Hartvigsen, Saadia Gabriel, Hamid Palangi, TodorMarkov,ChongZhang,SandhiniAgarwal,Tyna
+MaartenSap,DipankarRay,andEceKamar.2022. Eloundou,TeddyLee,StevenAdler,AngelaJiang,
+ToxiGen: Alarge-scalemachine-generateddataset andLilianWeng.2022. Aholisticapproachtoun-
+for adversarial and implicit hate speech detection. desired content detection in the real world. arXiv
+In Proceedings of the 60th Annual Meeting of the preprintarXiv:2208.03274.
+AssociationforComputationalLinguistics(Volume
+1: LongPapers),pages3309–3326,Dublin,Ireland. Yu Meng, Jiaxin Huang, Yu Zhang, and Jiawei Han.
+AssociationforComputationalLinguistics. 2022. Generatingtrainingdatawithlanguagemodels:
+Towards zero-shot language understanding. arXiv
+Qiao Jin, Bhuwan Dhingra, Zhengping Liu, William preprintarXiv:2202.04538.
+Cohen, and Xinghua Lu. 2019. PubMedQA: A
+datasetforbiomedicalresearchquestionanswering. SubhabrataMukherjee,ArindamMitra,GaneshJawa-
+InProceedingsofthe2019ConferenceonEmpirical har, Sahaj Agarwal, Hamid Palangi, and Ahmed
+Methods in Natural Language Processing and the Awadallah.2023. Orca: Progressivelearningfrom
+9thInternationalJointConferenceonNaturalLan- complexexplanationtracesofgpt-4. arXivpreprint
+guageProcessing(EMNLP-IJCNLP),pages2567– arXiv:2306.02707.
+2577,HongKong,China.AssociationforComputa-
+tionalLinguistics. YasumasaOnoe,MichaelJQZhang,EunsolChoi,and
+Greg Durrett. 2021. Creak: A dataset for com-
+Diederik P Kingma and Jimmy Ba. 2014. Adam: A monsense reasoning over entity knowledge. arXiv
+methodforstochasticoptimization. arXivpreprint preprintarXiv:2109.01653.
+arXiv:1412.6980.
+Jack W Rae, Sebastian Borgeaud, Trevor Cai, Katie
+TakeshiKojima,ShixiangShaneGu,MachelReid,Yu- Millican, Jordan Hoffmann, Francis Song, John
+takaMatsuo,andYusukeIwasawa.2022. Largelan- Aslanides, Sarah Henderson, Roman Ring, Susan-
+guagemodelsarezero-shotreasoners. arXivpreprint nah Young, et al. 2021. Scaling language models:
+arXiv:2205.11916. Methods,analysis&insightsfromtraininggopher.
+arXivpreprintarXiv:2112.11446.
+AndrewKLampinen,IshitaDasgupta,StephanieCY
+Chan, Kory Matthewson, Michael Henry Tessler, NilsReimersandIrynaGurevych.2019. Sentence-bert:
+Antonia Creswell, James L McClelland, Jane X Sentenceembeddingsusingsiamesebert-networks.
+Wang, andFelixHill.2022. Canlanguagemodels InProceedingsofthe2019ConferenceonEmpirical
+learnfromexplanationsincontext? arXivpreprint MethodsinNaturalLanguageProcessing.Associa-
+arXiv:2204.02329. tionforComputationalLinguistics.
+Hunter Lang, Monica N Agrawal, Yoon Kim, and Ohad Rubin, Jonathan Herzig, and Jonathan Berant.
+DavidSontag.2022. Co-trainingimprovesprompt- 2022. Learning to retrieve prompts for in-context
+basedlearningforlargelanguagemodels. InInter- learning. InProceedingsofthe2022Conferenceof
+national Conference on Machine Learning, pages theNorthAmericanChapteroftheAssociationfor
+11985–12003.PMLR. ComputationalLinguistics: HumanLanguageTech-
+nologies, pages 2655–2671, Seattle, United States.
+BillYuchenLin,ZiyiWu,YichiYang,Dong-HoLee, AssociationforComputationalLinguistics.
+and Xiang Ren. 2021. RiddleSense: Reasoning
+about riddle questions featuring linguistic creativ- KeisukeSakaguchi,RonanLeBras,ChandraBhagavat-
+ity and commonsense knowledge. In Findings of ula,andYejinChoi.2021. Winogrande: Anadver-
+theAssociationforComputationalLinguistics: ACL- sarialwinogradschemachallengeatscale. Commun.
+IJCNLP2021,pages1504–1515,Online.Association ACM,64(9):99–106.
+forComputationalLinguistics.
+HongjinSu,JungoKasai,ChenHenryWu,WeijiaShi,
+JiachangLiu,DinghanShen,YizheZhang,BillDolan, TianluWang,JiayiXin,RuiZhang,MariOstendorf,
+Lawrence Carin, and Weizhu Chen. 2022. What LukeZettlemoyer,NoahASmith,etal.2022. Selec-
+makes good in-context examples for GPT-3? In tiveannotationmakeslanguagemodelsbetterfew-
+ProceedingsofDeepLearningInsideOut(DeeLIO shotlearners. arXivpreprintarXiv:2209.01975.
+2022): The 3rd Workshop on Knowledge Extrac-
+tionandIntegrationforDeepLearningArchitectures, Alon Talmor, Jonathan Herzig, Nicholas Lourie, and
+pages100–114,Dublin,IrelandandOnline.Associa- JonathanBerant.2019. CommonsenseQA:Aques-
+tionforComputationalLinguistics. tion answering challenge targeting commonsense
+knowledge. InProceedingsofthe2019Conference
+YinhanLiu,MyleOtt,NamanGoyal,JingfeiDu,Man- oftheNorthAmericanChapteroftheAssociationfor
+dar Joshi, Danqi Chen, Omer Levy, Mike Lewis, ComputationalLinguistics: HumanLanguageTech-
+Luke Zettlemoyer, and Veselin Stoyanov. 2019. nologies,Volume1(LongandShortPapers),pages
+Roberta: A robustly optimized bert pretraining ap- 4149–4158,Minneapolis,Minnesota.Associationfor
+proach. arXivpreprintarXiv:1907.11692. ComputationalLinguistics.
+15358
+
+Rohan Taori, Ishaan Gulrajani, Tianyi Zhang, Yann KangMinYoo,DongjuPark,JaewookKang,Sang-Woo
+Dubois,XuechenLi,CarlosGuestrin,PercyLiang, Lee,andWoomyoungPark.2021. GPT3Mix: Lever-
+andTatsunoriB.Hashimoto.2023. Stanfordalpaca: aginglarge-scalelanguagemodelsfortextaugmen-
+An instruction-following llama model. https:// tation. InFindingsoftheAssociationforComputa-
+github.com/tatsu-lab/stanford_alpaca. tionalLinguistics: EMNLP2021,pages2225–2239,
+Punta Cana, Dominican Republic. Association for
+RomalThoppilan,DanielDeFreitas,JamieHall,Noam ComputationalLinguistics.
+Shazeer, Apoorv Kulshreshtha, Heng-Tze Cheng,
+Denny Zhou, Nathanael Schärli, Le Hou, Jason Wei,
+Alicia Jin, Taylor Bos, Leslie Baker, Yu Du, et al.
+Nathan Scales, Xuezhi Wang, Dale Schuurmans,
+2022. Lamda: Languagemodelsfordialogapplica-
+Olivier Bousquet, Quoc Le, and Ed Chi. 2022.
+tions. arXivpreprintarXiv:2201.08239.
+Least-to-most prompting enables complex reason-
+ing in large language models. arXiv preprint
+George Tsatsaronis, Georgios Balikas, Prodromos
+arXiv:2205.10625.
+Malakasiotis, IoannisPartalas, MatthiasZschunke,
+Michael R Alvers, Dirk Weissenborn, Anastasia
+Krithara,SergiosPetridis,DimitrisPolychronopou-
+los,etal.2015. Anoverviewofthebioasqlarge-scale
+biomedicalsemanticindexingandquestionanswer-
+ingcompetition. BMCbioinformatics,16(1):1–28.
+ShuohangWang, YangLiu, YichongXu, Chenguang
+Zhu,andMichaelZeng.2021a. Wanttoreducela-
+beling cost? GPT-3 can help. In Findings of the
+AssociationforComputationalLinguistics: EMNLP
+2021,pages4195–4205,PuntaCana,DominicanRe-
+public.AssociationforComputationalLinguistics.
+Yizhong Wang, Hamish Ivison, Pradeep Dasigi, Jack
+Hessel, Tushar Khot, Khyathi Raghavi Chandu,
+DavidWadden,KelseyMacMillan,NoahASmith,
+Iz Beltagy, et al. 2023a. How far can camels go?
+exploringthestateofinstructiontuningonopenre-
+sources. arXivpreprintarXiv:2306.04751.
+YizhongWang,YeganehKordi,SwaroopMishra,Alisa
+Liu,NoahA.Smith,DanielKhashabi,andHannaneh
+Hajishirzi.2023b. Self-instruct: Aligninglanguage
+modelswithself-generatedinstructions. InProceed-
+ingsofthe61stAnnualMeetingoftheAssociationfor
+ComputationalLinguistics(Volume1: LongPapers),
+pages13484–13508,Toronto,Canada.Association
+forComputationalLinguistics.
+ZiruiWang,AdamsWeiYu,OrhanFirat,andYuanCao.
+2021b. Towardszero-labellanguagelearning. arXiv
+preprintarXiv:2109.09193.
+JasonWei,XuezhiWang,DaleSchuurmans,Maarten
+Bosma, Ed Chi, Quoc Le, and Denny Zhou. 2022.
+Chainofthoughtpromptingelicitsreasoninginlarge
+languagemodels. arXivpreprintarXiv:2201.11903.
+Can Xu, Qingfeng Sun, Kai Zheng, Xiubo Geng,
+PuZhao,JiazhanFeng,ChongyangTao,andDaxin
+Jiang. 2023. Wizardlm: Empowering large lan-
+guagemodelstofollowcomplexinstructions. arXiv
+preprintarXiv:2304.12244.
+JiachengYe,JiahuiGao,QintongLi,HangXu,Jiangtao
+Feng, Zhiyong Wu, Tao Yu, and Lingpeng Kong.
+2022. Zerogen: Efficient zero-shot learning via
+datasetgeneration. arXivpreprintarXiv:2202.07922.
+15359
+
+A Appendix targetsopen-domainquestionswherethenec-
+essaryreasoningpathisnotexplicitlystatedin
+A.1 DetailsofDataset
+thequestion,andneedstobeinferredthrough
+• PIQA (Bisk et al., 2020) is a binary-choice a strategic approach. The answers to these
+question answering task, which chooses the questionsareeither“yes”or“no”.
+mostsuitablesolutionforquestionsrelatedto
+physicalcommonsense.
+• CREAK(Onoeetal.,2021)hasbeenspecifi-
+callyformulatedforthepurposeofcommon-
+• WinoGrande (Sakaguchi et al., 2021) is a sense reasoning pertaining to entity knowl-
+taskthatinvolvesselectingthecorrectbinary edge. Thedatasetcomprisesassertionsofen-
+optiontofillinagivensentencethatrequires tities,forwhichtheanswersneedtobespeci-
+commonsensereasoning. fiedaseitherTrueorFalse.
+• CommonsenseQA (Talmor et al., 2019) is A.2 DataStatistics
+a multiple-choice question answering task,
+whichpicksthemostappropriateansweron
+Dataset #Train #Valid #Test
+generalcommonsensequestions.
+PIQA 14,113 1,838 2,000
+• Riddlesense (Lin et al., 2021) is a multiple- WinoGrande(XS) 160 633 634
+choicequestionsansweringtask,whichpicks CommonsenseQA 8,500 1,221 1,241
+the most appropriate answer on riddle-style Riddlesense 3,510 1,021 1,202
+questionsthatneedcognitiveprocess. BoolQ 9,27 1,35 1,365
+PubmedQA 450 50 500
+• BoolQ (Clark et al., 2019) is a question an- BioASQ 670 75 140
+swering task that answering questions with
+StrategyQA 2,061 114 115
+a simple “yes” or “no” response. Questions
+CREAK 10,176 685 686
+arenaturallyoccurringqueriessourcedfrom
+the Google search engine. In an open-book
+Table6: Datastatistics. Eachdataset. Weusein-house
+setting,themodelmustcomprehendthegiven
+testsetwhichisrandomlysplittedfromthetrainsetfor
+contextinordertoprovideananswer,whereas thosedatasetthatdonotprovidetestset.
+inaclosed-booksetting,theanswermustbe
+provideddirectlywithoutanycontext.
+• PubmedQA (Jin et al., 2019) is a task that
+involvesansweringresearchquestionspertain-
+ingtothecorrespondingabstractsofbiomedi-
+calresearchpapers,andtheanswersarepro-
+videdintheformof“yes”,“no”,or“maybe”.
+In our study, we treat “maybe” as “no” to
+ensure consistent output format with other
+datasets.
+• BioASQ (Tsatsaronis et al., 2015) offers a
+range of question answering tasks, covering
+various categories such as factoid, list, sum-
+mary,andyes/noquestionsbasedonthecon-
+tentofbiomedicalresearchpapersthathave
+beenreviewedbyexpertsinthefield. Forthe
+purpose of this study, our focus will be re-
+strictedtoquestionsthathavebinaryanswers
+of“yes”or“no”.
+• StrategyQA (Geva et al., 2021) is a bench-
+markforquestion-answeringthatspecifically
+15360

@@ -1,0 +1,972 @@
+UNIFIEDQA: Crossing Format Boundaries with a Single QA System
+DanielKhashabi1 SewonMin2 TusharKhot1 AshishSabharwal1
+OyvindTafjord1 PeterClark1 HannanehHajishirzi1,2
+1AllenInstituteforAI,Seattle,U.S.A.
+2UniversityofWashington,Seattle,U.S.A.
+Abstract
+Extractive [SQuAD]
+Question answering (QA) tasks have been Question: At what speed did the turbine operate?
+posed using a variety of formats, such as ex- Context: (Nikola_Tesla) On his 50th birthday in 1906, Tesla demonstrated
+his 200 horsepower (150 kilowatts) 16,000 rpm bladeless turbine. ...
+tractive span selection, multiple choice, etc. Gold answer: 16,000 rpm
+Thishasledtoformat-specializedmodels,and Abstractive [NarrativeQA]
+eventoanimplicitdivisionintheQAcommu-
+Question: What does a drink from narcissus's spring cause the drinker to do?
+nity. Wearguethatsuchboundariesareartifi- Context: Mercury has awakened Echo, who weeps for Narcissus, and states
+that a drink from Narcissus's spring causes the drinkers to "Grow dotingly
+cialandperhapsunnecessary,giventhereason- enamored of themselves." ...
+Gold answer: fall in love with themselves
+ingabilitiesweseektoteacharenotgoverned
+by the format. As evidence, we use the latest Multiple-Choice [ARC-challenge]
+advancesinlanguagemodelingtobuildasin- Question: What does photosynthesis produce that helps plants grow?
+Candidate Answers: (A) water (B) oxygen (C) protein (D) sugar
+gle pre-trained QA model, UNIFIEDQA, that
+Gold answer: sugar
+performswellacross20QAdatasetsspanning
+Yes/No [BoolQ]
+4 diverse formats. UNIFIEDQA performs on
+Question: Was America the first country to have a president?
+par with 8 different models that were trained
+Context: (President) The first usage of the word president to denote the
+onindividualdatasetsthemselves. Evenwhen highest official in a government was during the Commonwealth of England ...
+Gold answer: no
+facedwith12unseendatasetsofobservedfor-
+mats,UNIFIEDQAperformssurprisinglywell, Figure 1: Four formats (color-coded throughout the
+showingstronggeneralizationfromitsout-of- paper) commonly used for posing questions and an-
+format training data. Finally, fine-tuning this swering them: Extractive(EX), Abstractive(AB),
+pre-trained QA model into specialized mod- Multiple-Choice(MC), and Yes/No(YN). Sample
+els results in a new state of the art on 10 fac- datasetnamesareshowninsquarebrackets. Westudy
+toidandcommonsenseQAdatasets,establish- generalizationandtransferacrosstheseformats.
+ing UNIFIEDQA asastrongstartingpointfor
+buildingQAsystems.1
+multiple-choicedatasets,whileTalmorandBerant
+1 Introduction (2019)focustheirgeneralizationstudyonextrac-
+tive span prediction models. To the best of our
+Questionansweringisacommontoolforassessing
+knowledge, no single QA system targets, not to
+howwellcancomputersunderstandlanguageand
+mentionexcelsat,alloftheseformats.
+reason with it. To this end, the NLP community
+Thisraisesthequestion: CanQAmodelslearn
+hasintroducedseveraldistinctdatasets,withfour
+linguisticreasoningabilitiesthatgeneralizeacross
+popular QA formats illustrated in Fig. 1. For in-
+formats? Our intuition is simple: while question
+stance,somedatasetsexpecttheanswertobe“yes”
+format and relevant knowledge may vary across
+or“no”,orauniqueanswerspanintheassociated
+QAdatasets,theunderlyinglinguisticunderstand-
+paragraph (as opposed to multiple or no spans).
+ingandreasoningabilitiesarelargelycommon. A
+These differences have motivated their study in
+multiple-choicemodelmay,therefore,benefitfrom
+silos,oftenencodingQAformatintothemodelar-
+trainingonanextractiveanswersdataset. Building
+chitectureitself. Effortstoexploitmultipledatasets
+uponthisintuition,wepresentasinglepre-trained
+remain largely restricted to a single format. For
+QAsystem,namedUNIFIEDQA,thatexploitsin-
+example,Clarketal.(2019c)limitconsiderationto
+formationacross4differentQAformatstoachieve
+1https://github.com/allenai/unifiedqa strongperformanceacross20differentfactoidand
+1896
+FindingsoftheAssociationforComputationalLinguistics:EMNLP2020,pages1896–1907
+November16-20,2020.(cid:13)c2020AssociationforComputationalLinguistics
+
+Datasets SQuAD11 SQuAD2 NewsQA QuorefROPES NarQA DROP NatQARACE MCTest OBQA ARC QASC CQAWG PIQA SIQA BoolQ NP-BoolQ MultiRC
+Format Extractive QA (EX) Abstractive QA (AB) Multiple-choice QA (MC) Yes/NO QA (YN)
+Has paragraphs? ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓
+Has explicit candidate ans? ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓
+# of explicit candidates 4 4 4 4 8 5 2 2 3
+Para contains ans as substring? ✓ ✓ ✓ ✓
+Has idk questions? ✓
+Figure2:PropertiesofvariousQAdatasetsincludedinthisstudy:5extractive(EX),3abstractive(AB),9multiple-
+choice(MC),and3yes/no(YN).‘idk’denotes‘Idon’tknow’orunanswerablequestions. BoolQrepresentsboth
+theoriginaldatasetanditscontrast-setsextensionBoolQ-CS;similarlyforROPES,Quoref,andDROP.
+commonsenseQAdatasetslistedinFig.2. sirablebutalsoquantitativelybeneficial.
+In this work, we advocate for a unifying view
+2 RelatedWork
+ofQAformatsbybuildingaformat-agnosticQA
+system. Our work leverages recent progress in
+Several QA efforts have studied generalization
+text-to-textpre-trainedneuralmodels,specifically
+across datasets of a single format. For instance,
+T5 (Raffel et al., 2020) and BART (Lewis et al.,
+inMultiQA,TalmorandBerant(2019)studygen-
+2020), but with a strong focus on differing QA
+eralizationandtransfer,butonlyacrossextractive
+formats. ThisparadigmallowsunifyingmanyNLP
+spanselectiondatasets. Further,whiletheyshow
+models,whichformerlyhadtask-specificdesigns,
+strongleave-one-outstyleresults, theyfindasin-
+intoasingletext-to-textframework. Previouswork
+glesystemperformssubstantiallyworsethanone
+uses textual prefixes to explicitly define the task
+tunedtoeachdataset. InORB,Duaetal.(2019a)
+associated with each input instance (Raffel et al.,
+proposeamulti-datasetevaluationbenchmarkspan-
+2020;Radfordetal.,2019b);oftensuchattempts
+ningextractiveandabstractiveformats. However,
+to build a single model for multiple NLP tasks
+that study is limited to an evaluation of systems,
+underperform the standard pre-training plus fine-
+fallingshortofaddressinghowtobuildsuchgener-
+tuningsetup(amodelpertask)(Raffeletal.,2020).
+alizedmodels. TheMRQAsharedtask(Fischetal.,
+Ourworknarrowsdownthescopetotasksthat 2019)focusesonspan-predictiondatasets. Unlike
+staywithintheboundariesofQA,demonstrating alltheseefforts,ourgoalistoinvestigatetransfer
+thataunifiedtext-to-textparadigmcan,infact,be andgeneralizationacrossdifferentQAformats,as
+successfulacrossdifferentQAtasksandformats. wellastobuildasinglesystemthatdoesthiswell.
+Wedevelopasinglepre-trainedQAmodelbytrain- Exploitingcommonality acrossmachine learn-
+ingtext-to-textmodelsonasetofseedQAdatasets ingtaskshasarichhistorystudiedundertransfer
+of multiple formats, taking natural text as input, learning(Caruana,1997;Clarketal.,2019b). Mc-
+withoutusingformat-specificprefixes. Ourexperi- Cannetal.(2018)andKeskaretal.(2019)study
+mentsshowthat UNIFIEDQA canbeappliedas-is transferamongvariousNLPtasksbycastingthem
+to different QA tasks, generalizes well to other intoasingleQAformat—aneleganttransferlearn-
+unseendatasets(zero-shot),andwithfurtherfine- ing approach but orthogonal to the goal of this
+tuningachievesstate-of-the-artresultsonmanyQA work. Asnotedearlier,Raffeletal.(2020)investi-
+tasksincludingcommonsenseandfactualdatasets. gatethetransferbetweenseveraldiverseNLPtasks
+(machine translation, summarization, etc). Their
+Contributions. This work advocates for a uni- key contribution is a text-to-text framework, and
+fied view of different QA formats, and for build- a powerful model called T5, that makes it easier
+ingformat-agnosticQAsystems. Tosupportthis tomixmultipletasksbyencodingbothinputsand
+view,wepresent UNIFIEDQA,asinglepre-trained outputsastext. Theyrelyontextualprefixestoex-
+QAsystemthatworkswellonandgeneralizesto plicitlydefinethetaskcorrespondingtoeachinput
+datasets with different formats (§6.2), while per- instance. Whilewebuildupontheirframework,we
+formingonparwithstate-of-the-artdedicatedsys- narrowourfocustovariationsofQA.Thisallows
+temstailoredtoeachdataset(§6.1). Additionally, ustoachievestrongresultswhileavoidingreliance
+fine-tuning UNIFIEDQA intospecializedsystems onanyformat-specificprefixes. Ourmodelslearn
+sets a new state of the art for 10 datasets (§6.3), toinfertheformatofeachinputquestionbasedon
+establishingitasapowerfulstartingpointforQA itscontent(e.g.,whetherthephrasingoftheques-
+research. Our findings demonstrate that crossing tiondemandsayes/noanswer). Moreover,weare
+QAformatboundariesisnotonlyqualitativelyde- abletodemonstrategeneralizationacrossQAtasks,
+1897
+
+whichpriorworkfailedtoachievepresumablydue 3.1 Text-to-TextEncoding
+toitsfocusontoobroadasetofNLPtasks.
+Weconverteachofourtargetdatasetsintoatext-
+in/text-outformat(Raffeletal.,2020;Lewisetal.,
+3 UNIFIEDQA:Multi-formatTraining
+2020;Radfordetal.,2019b). Thequestionalways
+SupposewewouldliketotrainaunifiedQAmodel comesfirst,followedbysomeadditionalinforma-
+thatcanoperateoverkformatsF ,F ,...,F . For tion (context paragraph or candidate answers, or
+1 2 k
+each format F , suppose we have (cid:96) datasets sets both). We use “\n” separators between different
+i i
+Di,Di,...,Di where Di = (Ti,Ei) includes parts of the input. This ensures having a human-
+1 2 (cid:96)i j j j
+both training and evaluation examples. In some likeencodingwhilenotmakingitoverly-specific
+cases,thetrainingsetTi maybeemptyorwemay toacertainformat.
+j
+want to ignore it in order to treat Di as an ‘un- Our unified model incorporates the following
+j
+seen’,evaluation-onlydatasetandassessamodel’s fourcommonquestion-answeringformats. Specific
+generalizationtoit. datasetswithinthemaredeferredtoSection4.1.
+Weusethetext-to-textparadigmtoconverteach Extractive(EX) questions Q include a context
+training question q in format F into a plain-text paragraph C (typically a paragraph) and require
+i
+inputrepresentationenc (q). Thisconversionuses models to extract the answer as a substring from
+i
+a natural encoding process that will be described thecontext. Insomedatasets,‘unanswerable’can
+shortly(§3.1)forfourcommonQAformats,andis sometimesbethecorrectresponse.
+easilyextensibletootherformatsaswell. Wefol-
+Abstractive(AB) questionsQrequiremodelsto
+lowasimpleapproachofcreatingamixedtraining
+produceanswersthatareoftennotmeresubstrings
+poolconsistingofallavailabletraininginstances:
+oftheprovidedcontextparagraphC.
+(cid:91)
+k
+(cid:91)
+(cid:96)i
+(cid:110) (cid:111)
+Multiple-choice(MC) questions Q come with a
+T˜ = enc i (q) | q ∈ T j i setofcandidateanswers{A i },ofwhichgenerally
+i=1j=1 exactly one is correct. In some cases, they also
+includeacontextparagraphC.
+Trainingbatchesaredrawnfromthispooleddata,
+T˜,byincludingeachq ∈ Ti withaprobabilitypro- Yes/No(YN) questions Q expect a ‘yes’ or ‘no’
+j
+portional1/|Ti|. Eachbatchthus,onaverage,con- answerastheresponseandmayincludeacontext
+j
+tainsthesamenumberofinstancesfromeachtrain- paragraphC.
+ingset,regardlessofitssize. Similartreatmentsof Table1providesexamplesofthenaturalinput
+taskmixinghavealsobeenadoptedbyArivazha- and output encoding for each of these formats,
+gan et al. (2019) and Raffel et al. (2020). As our where both input and output representations are
+experimentswillshow,ourmulti-formatmixingap- rawtext. Thereisnoexplicitinformationregard-
+proachworkswell. Itclearlyhighlightsthevalueof ing a question being an MC question or having
+trainingonout-of-formatdataandconfirmsourin- exactlyfourcandidateanswers. Specifically,MC
+tuitionthattherearestrongtiesacrossQAformats questions without any context paragraph are en-
+intermsoftheunderlyingreasoningabilities.2 codedasquestion \n (A) c1 (B) c2 ...where
+Ourunifiedquestion-answeringsystemisbased c1,c1,...arethesetofcandidateanswers(seethe
+ontherecenttext-to-textframeworks,particularly, example from ARC dataset). If the question in-
+T5 (Raffel et al., 2020) and BART (Lewis et al., cludesacontextparagraph,itisappendedafterthe
+2020). Wefirstdefineaunifyingencodingofthe candidateanswers: question \n (A) c1 (B) c2
+instances across various formats (§3.1). We then ... \n paragraph,asshownintheexamplefrom
+introduceUNIFIEDQA(§3.2)thatisaQAsystem the MCTest dataset. Questions in the other three
+trainedondatasetsinmultipleformats,indicating formats(EX,AB,andYN)areencodedsimplyas
+newstate-of-the-artresultson10datasetsandgen- question \n paragraph.
+eralizationtounseendatasets. Tore-emphasize,unlikepriorwork(Raffeletal.,
+2020), we do not specify any task-, dataset-, or
+2Amoresophisticatedteachingcurriculum(Sachanand
+Xing, 2016) or approaches such as model distillation and format-specific prefixes in the input representa-
+teacherannealing(Clarketal.,2019b)arelikelytofurther tion. Whether the answer should be extracted or
+improvetheperformanceoftheresultingunifiedmodel,bol-
+abstracted,andwhetherfromtheprovidedcontext
+steringthestrengthofouradvocacyforaunifiedviewofall
+QAformats.Weleavetheirexplorationtofuturework. paragraph or candidate answers (or the fact that
+1898
+
+Dataset SQuAD 1.1 Similartopre-trainedlanguagemodels,theresult-
+At what speed did the turbine operate? \n
+(Nikola_Tesla) On his 50th birthday in 1906, Tesla ingpre-trainedQAmodelcanbeusedasastarting
+EX Input
+demonstrated his 200 horsepower (150 kilowatts)
+16,000 rpm bladeless turbine. ... pointforfine-tuningonotherQAdatasets.
+Output 16,000 rpm
+Dataset NarrativeQA
+4 FormatsandDatasets
+What does a drink from narcissus's spring cause the
+drinker to do? \n Mercury has awakened Echo, who
+AB Input weeps for Narcissus, and states that a drink from
+Narcissus's spring causes the drinkers to ``Grow 4.1 Datasets
+dotingly enamored of themselves.'' ...
+Output fall in love with themselves Weevaluate UNIFIEDQA on20existingdatasets
+Dataset ARC-challenge
+thattargetdifferentformatsaswellasvariouscom-
+What does photosynthesis produce that helps plants
+Input
+grow? \n (A) water (B) oxygen (C) protein (D) sugar plex linguistic phenomena. Fig. 2 summarizes
+Output sugar
+key properties of our datasets (whether it comes
+Dataset MCTest
+MC
+Who was Billy? \n (A) The skinny kid (B) A teacher with a paragraph or answer candidates, whether
+(C) A little kid (D) The big kid \n Billy was like a
+Input king on the school yard. A king without a queen. He theparagraphexplicitlycontainstheanswer,etc).
+was the biggest kid in our grade, so he made all the
+rules during recess. ... Mostimportantly,theyaregroupedintoseveralfor-
+Output The big kid
+mats/categoriesasdescribedbelow. Table2gives
+Dataset BoolQ
+Was America the first country to have a president? certain statistics of these datasets. We next pro-
+\n (President) The first usage of the word president
+YN Input to denote the highest official in a government was videasummaryenumeratingthesedatasets,with
+during the Commonwealth of England ...
+additionaldetailsdeferredtoAppendixA.1.
+Output no
+Table1: Exampletext-to-textencodingofinstances. ExtractiveQA(EX). Amongthedatasetsinthis
+popularformat,weadoptSQuAD1.1(Rajpurkar
+et al., 2016), SQuAD 2 (Rajpurkar et al., 2018),
+theseevenarecandidateanswers)isexpectedtobe
+NewsQA (Trischler et al., 2017), Quoref (Dasigi
+inferredbythesystem.
+etal.,2019),ROPES(Linetal.,2019).
+3.2 UNIFIEDQA:ThePre-TrainedModel
+Abstractive QA (AB). The datasets used from
+Thespecificpre-trainedQAmodelweprovideand this format are: NarrativeQA/NarQA (Kociský
+use in all our experiments is trained on represen- et al., 2018), the open-domain version of Natu-
+tativedatasetsforeachofthe4formatsdiscussed ralQuestions/NatQA (Kwiatkowski et al., 2019),
+earlier. Weempiricallychosethefollowing8seed andDROP(Duaetal.,2019b).
+datasetsfortrainingUNIFIEDQA,3 basedontheir
+effectiveness in our pilot study (details deferred Multiple-choice QA (MC). We use the
+to Section 5) assessing which datasets are most following MC datasets: MCTest (Richard-
+valuableforout-of-formattraining: son et al., 2013), RACE (Lai et al., 2017),
+OpenBookQA/OBQA (Mihaylov et al., 2018),
+• EX:SQuAD1.1,SQuAD2.0 ARC(Clarketal.,2018,2016),QASC(Khotetal.,
+• AB:NarrativeQA 2019), CommonsenseQA/CQA (Talmor et al.,
+• MC:RACE,ARC,OBQA,MCTest 2019),PIQA(Bisketal.,2020),SIQA(Sapetal.,
+• YN:BoolQ 2019), and Winogrande (Sakaguchi et al., 2020).
+Several of the MC datasets do not come with
+One can easily use other combinations of for-
+accompanyingparagraphs(suchasARC,QASC,
+mats and datsets to create variants of our UNI-
+OBQA). For most of this the work, we keep the
+FIEDQA model,orextenditasfuturedatasetsbe-
+questionsasiswithnoadditionalretrieval(unless
+comeavailableornewformatsareintroduced.
+otherwisementioned). Oneothervariabilityamong
+Unlessotherwisenoted,weusethelargestavail-
+thesedatasetsistheirnumberofcandidateanswers.
+able T5 model (11B parameters) as the starting
+While many datasets have four candidates (see
+point for training our model and call the system
+Fig. 2), others have more. Later (in §6.2) we
+UNIFIEDQA. We also report results of training
+willseethatourapproachgeneralizestodatasets
+our system with BART
+large
+, referred to as UNI-
+withdifferentnumbersofcandidates,evenifsuch
+FIEDQA
+BART
+(see§6.3). Detailsontheparameters
+questionshavenotbeenseenduringtraining.
+ofthemodelsusedaredeferredtoAppendixA.2.
+Yes/No QA (YN). The YN datasets we
+3Future references to ‘seed dataset’ point to the QA
+datasetsusedinthissection. use are BoolQ (Clark et al., 2019a) and a
+1899
+
+Train Eval. Best 95% Input Output nottheincorrectone.4
+Dataset
+setsize setsize published CI(%) length length
+SQuAD1.1 87k 10k 95.6 0.4 136.2 3.0
+SQuAD2.0 130k 11k 91.2 0.5 139.9 2.6 5 PilotStudy: CanOut-of-Format
+NewsQA 76k 4k 66.8 1.4 606.6 4.0
+TrainingHelp?
+Quoref 22k 2k 86.1 1.5 352.7 1.7
+Quoref-CS - 700 55.4 3.6 324.1 2.2
+ROPES 10k 1.4k 61.1 2.5 169.1 1.4
+Wefirstanswerthequestion: Isthebroadideaof
+ROPES-CS - 974 32.5 3.0 182.7 1.3
+NarQA 65k 21k 58.9 0.7 563.6 6.2 benefitingfromout-of-formattrainingevenviable?
+NatQA 79k 3.6k 42.2 1.6 607.0 2.2
+For instance, is our intuition correct that an MC
+DROP 77k 9k 89.1 0.6 189.1 1.6
+DROP-CS - 947 54.2 3.2 206.0 2.1 dataset can, in practice, benefit from training on
+RACE 87k 4k 89.5 0.9 317.9 6.9
+anEXdataset? Beforediscussingourmainexper-
+OBQA 4k 501 80.0 3.3 28.7 3.6
+MCTest 1.4k 320 86.5 3.4 245.4 4.0 imental results, we briefly report on a pilot study
+ARC(easy) 2k 2k 80.0 1.7 39.4 3.7
+ARC(chal.) 1k 1k 67.8 2.9 47.4 5.0 thatassessesthefollowingbasicquestion: Given
+CQA 9.7k 1.2k 79.1 2.2 26.8 1.5
+WG 40.3k 1.7k 67.5 2.2 25.2 3.0 a training set Ti (the anchor dataset) of QA for-
+1
+PIQA 16.1k 3k 79.4 1.4 49.6 20.2 mat F , is there an out-of-format training set Tj
+SIQA 33.4k 2.2k 78.0 1.7 37.3 4.7 i 1
+BoolQ 9k 3k 91.0 1.0 105.1 1.0 offormatF suchthattrainingjointlyonTi∪Tj
+BoolQ-CS - 461 71.1 4.0 108.9 1.0 j 1 1
+NP-BoolQ 10k 3k 78.4 1.4 106.2 1.0 improvesperformancerelativetotrainingonlyon
+MultiRC - 312 91.7 2.6 293.3 1.0 Ti? To this end, we evaluate both on the match-
+1
+ing evaluation set Ei as well as on ‘unseen’ data
+Table 2: Dataset Statistics. CQA, OBQA, WG, 1
+andNarQArefertoCommonsenseQA,OpenBookQA,
+Ei,Ei,...ofthesameformat.
+2 3
+Winogrande, and NarrativeQA, respectively. The CI TheresultsaresummarizedinTable3. Thetwo
+column shows the upper 95% confidence interval for rowsineachindividualtablecorrespondtotraining
+the evaluation set as a percentage, based on the Wil- onTi (theanchordataset)andonTi∪X,where
+1 1
+sontestaroundthemeanscorelistedasapercentagein X isanout-of-formatdatasetcorrespondingtoTj
+thebestknownperformancecolumn. Inputandoutput 1
+above. Thecolumnsrepresentvariousevaluation
+representation lengths are measured in the number of
+setsofformatF . Foreachcolumn,‘X = ...’at
+tokensandaveragedacrossthedataset. i
+theverybottomindicatestheout-of-formatdataset
+X that was themost helpful inimproving perfor-
+naturally-perturbedversionofthisdataset,BoolQ- manceontheevaluationsetinthatcolumn.5
+NP(Khashabietal.,2020),andthebinary(yes/no) Consider the case of the anchor set Ti being
+1
+subsetofMultiRC(Khashabietal.,2018).
+BoolQ and the evaluation set being NP-BoolQ,
+Contrast-sets. Additionally, we use contrast- bothofformatYN.Here,includingout-of-format
+sets (Gardner et al., 2020) for several of our training data X=SQuAD2 boosts performance
+from 51% to as much as 59%. The gain may be
+datasets(denotedwith“CS”):BoolQ-CS,ROPES-
+lessinothercases,butacrossallanchorandevalu-
+CS,Quoref-CS,DROP-CS.Theseevaluationsets
+ationdatasets,wegenerallyobservethatthereisat
+are expert-generated perturbations that deviate
+leastoneout-of-formattrainingsetwhoseinclusion
+fromthepatternscommonintheoriginaldataset.
+improvesperformance.
+4.2 EvaluationMetricsforTextualOutput Thispilotstudythusprovidesaproofofconcept
+We evaluate each dataset using the metric used that out-of-format training can indeed help a QA
+mostoftenforitinpriorwork. FortheEXformat, modelinnearlyeverycase. Ofcourse,thisstudy
+it’stheF1scoreoftheextractedspanrelativetothe onlyshowstheexistenceofsuchanout-of-format
+goldlabel. FortheABformat,weuseROUGE-L dataset,ratherthanprovideasingleunifiedmodel.
+metric(Linetal.,2006;Minetal.,2019;Nishida Nevertheless,ithelpsidentifyrepresentativetrain-
+etal.,2019). ForNatQAweusetheexact-match ingsetsfromeachformatthatweremosthelpful.
+metric, following Min et al. (2020). For the MC Asalludedtoearlier,weusedthisempiricaldatato
+format,wematchthegeneratedtextwiththeclosest guidewhichtrainingsetstoincludewhenbuilding
+answercandidatebasedtokenoverlapandcompute UNIFIEDQA inSection3.2.
+theaccuracy. FortheYNformat,wefollowClark The experimental results from this case study
+et al. (2019a) to measure if the generated output are summarized in the aggregated plot shown in
+matchesthecorrect‘yes’or‘no’label. Inrarecases
+4TheevaluationcodeisavailableattheURLinFootnote1.
+wheretheoutputislongerthanoneword(e.g.,‘yes
+5AppendixA.5reportsextendedresults,includingtheper-
+itis’),wecheckifitcontainsthecorrectlabelbut formancewithvariouschoicesofX.
+1900
+
+Trained on ↓ - Evaluated on → SQuAD11 SQuAD2 NewsQA Quoref Quoref-CS Trained on ↓ - Evaluated on → RACE OBQA ARC-chal MCTest
+SQuAD11 85.9 42.8 51.7 28.2 28.11 RACE 55.8 26.6 28.0 62.5
+SQuAD11 + X 85.8 42.8 52.1 29.4 29.84 RACE + X 59.1 32.2 28.4 69.4
+Best X BoolQ OBQA OBQA NarQA OBQA Best X SQuAD11 NarQA NewsQA SQuAD11
+Trained on ↓ - Evaluated on → BoolQ MultiRC NP-BoolQ BoolQ-CS Trained on ↓ - Evaluated on → NarQA DROP DROP-CS
+BoolQ 76.4 64.1 51.3 53.4 NarQA 51.5 10.2 11.1
+BoolQ + X 78.9 66.0 59.4 61.0 NarQA + X 53.0 14.4 14.6
+Best X SQuAD2 OBQA SQuAD2 NarQA Best X SQuAD2 SQuAD2 SQuAD2
+Table 3: Pilot study showing that out-of-format training can help improve performance. Each table compares
+trainingonjusttheanchordataset(e.g.,BoolQinthetop-lefttable)withtrainingalsoonanout-of-formatdataset
+denoted‘X’.Evaluationisontheanchordatasetaswellasunseendatasetsofthatformat. Thelastrowidentifies
+theout-of-formatdatasetthathelpedmostoneachevaluationdataset. Allresultsarebasedonthe“small”sizeT5
+model. ColordenotesQAformat(seeTable2).
+edge weight, the overall width of a dataset (cid:96) on
+NQA the left also depicts how much it contributes to
+SQuAD1.1
+out-of-formatdatasets. E.g.,NQA(NarrativeQA)
+ROPES is the most helpful dataset and even helps mul-
+N ewsQA tiple formats. Similarly our extractive datasets
+SQuAD 2.0 Quoref
+(SQuAD11.1, SQuAD 2, and NewsQA) are also
+SQuAD 1.1
+relativelymorehelpful. Whilelargedatasetsgen-
+SQuAD 2.0
+NewsQA ARC (easy) erally appear to help, RACE, another large-scale
+ARC (chall)
+CQA dataset, doesn’t help that much. The least help-
+fuldatasetinthemixisBoolQwhichfocuseson
+MCTest
+yes/noquestions.
+OBQA
+QASC In a similar vein, the wider the dataset on the
+NQA RACE
+BoolQ right hand side, the more it can be benefit from
+BoolQ-CS
+out-of-format datasets. Among these beneficiary
+RACE MultiRC
+OBQA NP-BoolQ datasets,allfourformatsareequallyrepresented.
+BoolQ
+F
+da
+ig
+ta
+u
+s
+r
+e
+e
+ts
+3
+.
+:
+T
+B
+h
+i
+e
+pa
+d
+r
+a
+t
+t
+i
+a
+te
+se
+g
+ts
+ra
+o
+p
+n
+h
+t
+s
+h
+h
+e
+o
+l
+w
+ef
+i
+t
+n
+w
+g
+e
+th
+re
+e
+u
+v
+s
+a
+e
+lu
+d
+e
+fo
+o
+r
+f
+t
+v
+r a
+a
+i
+r
+n
+io
+in
+u
+g
+s 6 ExperimentalResults
+and on the right for evaluation. The wider thNeQAe dge Wenowdiscussourmainexperimentalresults,eval-
+fromad ataset(cid:96)(ontheleft)toadatasetr(onthe right), uatingUNIFIEDQAonseeddatasets(usedfortrain-
+thehigh erthecontributionofaddingtheout-of-R
+O
+fA
+B
+o
+Q
+CrE
+A
+m at
+ingthesystem)aswellasunseendatasets.
+dataset (cid:96)tothetrainingsetofquestionsinr’sfoBromolQa t.
+6.1 UNIFIEDQA vs.8DedicatedModels
+IsUNIFIEDQA,asinglepre-trainedmulti-format
+Fig.3. Inthisbipartitegraph,thedatasetsusedfor
+QAsystem,asgoodasdedicatedsystemstrained
+trainingareonthelefthandsideandtheevaluation
+forindividualdatasets? Weemphasizethatthean-
+datasetsareontherighthandside. Theweightof
+swer to this question is not as simple as it may
+each edge w((cid:96),r) indicates the contribution of a
+seem,sinceearlierworkshaveobservedthatasys-
+dataset(cid:96)whenusedfortrainingjointlywithanan-
+temaddressingmultipletasksoftenunderperforms
+chordatasetd,whenevaluatedonr (dandr have
+afocusedsystem(Raffeletal.,2020).
+thesameformat.) Specifically,
+(cid:104) (cid:105) Fig.4summarizestheresultsoftherelevantex-
+(cid:0) (cid:1) (cid:0) (cid:1)
+w((cid:96),r) = avg S (cid:96)∪d;r −S d;r ,
+d periment. The gray bars belong to UNIFIEDQA
+whereS(d,r)isthescoreachievedonraftertrain-
+(asinglesystemformultipledatasetsofdifferent
+ingond. Sinceweonlyfocusongainsfromout-of-
+formats). ThecoloredbarsaredifferentT5-based
+formattraining,wedroptheedgesthatarenegative
+systemstailoredtoindividualdatasets(adifferent
+orbetweentwodatasetsofthesameformat.
+system for each dataset). The results show that
+As expected, there are strong connections be- UNIFIEDQA performsalmostasgoodasindivid-
+tween the AB and EX datasets in Fig. 3 since ual T5 models targeted to each dataset. In some
+theirdefinitionsarequitesimilar. Apartfromthe cases UNIFIEDQA performs even better than the
+1901
+
+Common
+Seen dataset? Model ↓ - Evaluated on → NewsQA Quoref Quoref-CS ROPES ROPES-CS DROP DROP-CS QASC NP-BoolQ BoolQ-CS MultiRC Avg
+senseQA
+UnifiedQA [EX] 58.7 64.7 53.3 43.4 29.4 24.6 24.2 55.3 62.8 20.6 12.8 7.2 38.1
+UnifiedQA [AB] 58.0 68.2 57.6 48.1 41.7 30.7 36.8 54.1 59.0 27.2 39.9 28.4 45.8
+No UnifiedQA [MC] 48.5 67.9 58.0 61.0 44.4 28.9 37.2 67.9 75.9 2.6 5.7 9.7 42.3
+UnifiedQA [YN] 0.6 1.7 1.4 0.0 0.7 0.4 0.1 14.8 20.8 79.1 78.6 91.7 24.2
+UnifiedQA 58.9 63.5 55.3 67.0 45.5 32.5 40.1 68.5 76.2 81.3 80.4 59.9 60.7
+66.8 86.1 55.4 61.1 32.5 89.1 54.2 85.2 79.1 78.4 71.1 --
+Yes Previous best
+Retro Reader TASE XLNet ROBERTa RoBERTa ALBERT MTMSN KF+SIR+2StepFreeLB-RoBERTaRoBERTa RoBERTa --
+Table4:Generalizationtounseendatasets:Multi-formattraining(UNIFIEDQA)oftenoutperformsmodelstrained
+thesamewaybutsolelyonotherin-formatdatasets(e.g.,UNIFIEDQA[EX],whichistrainedonallextractivetrain-
+ing sets of UNIFIEDQA. When averaged across all evaluation datasets (last column), UNIFIEDQA shows strong
+generalizationperformanceacrossallformats. Notably,the“Previousbest”models(lastrow)weretrainedonthe
+targetdataset’strainingdata, butareeventhenoutperformedbyUnifiedQA(whichhasneverseenthesedatasets
+duringtraining)ontheYNtasks.
+Dedicated Models UnifiedQA
+100 Quoref (Segal et al., 2019), DROP (Lan et al.,
+90 2019), ROPES (Lin et al., 2019), QASC (Khot
+etal.,2019),CommonsenseQA(Zhuetal.,2020)
+80
+andx-CSdatasets(Gardneretal.,2020).)
+70
+60 Wemakethreekeyobservations: (1)Onaverage
+50 (lastcolumn),UNIFIEDQAshowsmuchstronger
+generalizationacrossawiderangeofdatasets. (2)
+40
+SQ uA D 1. S
+1
+Q uA D 2 R A C E O B Q A A R C -E as A
+y
+R C -C ha M
+l
+C T est B oolQ N arQ A A vg. o b n ett 9 er (o g u e t ne o r f a 1 li 2 z ) at d io a n tas th et a s n , U an N y IF s I i E n D gl Q e- A for s m ho a w t s ex a -
+Figure 4: UNIFIEDQA is on-par with, and often out- pert. For example, while the system is trained
+performs, 9 different equally-sized T5-based systems onmultiple-choicequestionswith4candidatean-
+tailoredtoindividualdatasets. Thefigurecontainssep- swers, it works quite well on datasets with more
+arate models for each of the two subsets of the ARC than 4 candidate answers (QASC and Common-
+andRegentsdatasets.
+senseQAhavehas8and5candidateanswersper
+question,respectively). (3)Single-formatexperts
+are better at generalization only when the source
+single-dataset experts (e.g., on OBQA or NQA).
+and target datasets are very similar (for instance
+Onaverage(lastcolumn)UNIFIEDQAclearlyout-
+SQuADandQuoref).
+performstheensembleofdataset/format-specific
+systems. UNIFIEDQAthusoffersflexibilityacross
+6.3 State-of-the-ArtviaSimpleFine-tuning
+multipleQAformatswhilecompromisingalmost
+nothingcomparedtodataset-specificexperts. Fine-tuning of pre-trained language models has
+becomethestandardparadigmforbuildingdataset-
+6.2 GeneralizationtoUnseenDatasets
+specificstat-of-the-artsystems(Devlinetal.,2019;
+Wenowexplorewhether UNIFIEDQA generalizes Liu et al., 2019). The question we address here
+welltoother,unseendatasets. Table4summarizes is: whenitcomestoQA,isthereavalueinusing
+theresultsofexperimentswhereweevaluatevar- UNIFIEDQAasastartingpointforfine-tuning,as
+ious models on datasets that are not used to train opposedtoavanillalanguagemodelthathasnot
+them. Itcompares UNIFIEDQA (trainingonmul- seenotherQAdatasetsbefore?
+tipleformats)withtrainingonvariousdatasetsof To address this question, we fine-tune each of
+asingleformat(e.g., UNIFIEDQA [EX],builtby UNIFIEDQA,T5,andBARTonseveraldatasetsby
+trainingthemodelononlyextractivedatasets). selectingthebestcheckpointonthedevset, and
+ThefirstfewrowsofthetableshowT5models evaluatingonthetestset. Table5summarizesthe
+trained for individual formats, followed by UNI- results of the experiments. The table shows two
+FIEDQA.Forcompleteness, weincludethehigh- variants: UNIFIEDQA T5 and UNIFIEDQA BART .
+est previous scores for each dataset; one must Allresultsarebasedonthe11BversionofT5.
+be careful when reading these numbers as the Thecolumnsindicatetheevaluationonthetest
+best previous numbers follow the fully super- set corresponding to the data that was used for
+vised protocol(forNewsQA(Zhangetal.,2020), training. Foreachdataset,thefirstlineofthetable
+1902
+
+Model M↓ o- dEevla ↓l. -→ Eval. → OBQA O*BQA * O (w B / Q IR A ) O (w B / Q IR A ) ARC-eaAsyR *C-easy * AR (w C / - I e R aAs ) yR ( w C / - I e R as ) yA RC-chAalR *C-chal * A ( R w C / - I c R h ) aAl ( R w C / - I c R h ) al QASC QASC Q (w A / S IR C ) Q (w A / S IR C )
+PreviouPsr ebveisotu psu bbelissth peudb li ( s C h l e a d r R k o e B (tC E all R a.,r TR 2k0 ao e1 B t9 E acl R )., T 20( a M19itcr) K a F e + t( Ma S l I .i R ,t r2 K a0 F e2 + t0 a S )l I . R , 2 0(C20la)r R k o e B t( E Cal R l.a, T 2r R k0 ao 1e B 9t c E a)l R ., T 20 aR 19 o c B )a E F l. R r , e T 2 e R 0 a L 2 o B ( 0 BZ - )a hE F l u . R r , e eT 2 e t 0 a L 2 B (( 0 ZC - ) h laur R ek o t e B t E (aCl R .l, T a2r R 0 a k 1 o 9e B tc E )a l R ., FT 2( r 0 a Z e 1 e h9 L uc B e) - t a RF l( o . r ,Z eB 2 e h E 0 L u2 R B e0 T- t) a a R l o ., B 2 E 02 R 0 T ) a -- -+- e 2 t S K a t F e l. p + , S 2 (M 0 IR 2 +i 0 e t2r )t S K a a t F e l. p + , S 2 (M 0 IR 2 i 0 tr ) a
+75.7 75.7 80.0 80.0 69.9 69.9 80.0 80.0 55.9 55.9 67.8 67.8 -- -- 85.2 85.2
+BARTlBargAe
+R
+- F
+T
+T
+large - FT
+67.8
+67.8
+66.2
+66.2
+64.1
+64.1
+79.6
+79.6
+36.6
+36.6
+40.4
+40.4
+50.0
+50.0
+75.3
+75.3
+Unified U Q n A ifiBeAdRQT - A F B T ART - FT 63.8 63.8 70.0 70.0 68.0 68.0 82.7 82.7 52.1 52.1 55.0 55.0 53.2 53.2 78.2 78.2
+T5 - FT 84.2 84.2 83.8 90.0 65.4 69.7 77.0 88.5
+T5 - FT 84.2 84.2 83.8 90.0 65.4 69.7 77.0 88.5
+UnifiedQA - FT 86.0 87.2 86.4 92.0 75.0 78.5 78.5 89.6
+UnifiedQA - FT 86.0 87.2 86.4 92.0 75.0 78.5 78.5 89.6
+Model ↓ - Eval. → RACE * ComQA WG PIQA SIQA ROPES NatQ (w/ IR)
+Model ↓ - Eval. → RACE * ComQA WG PIQA SIQA ROPES NatQ (w/ IR)
+ALBERT FreeLB- RoBERTa RoBERTa RoBERTa RoBERTa RoBERTa DPR+BART
+Previou P s r e b v e i s o t u p s u b b e li s s t h p e u d b lis ( h L e a d n et a (L l., a 2A n 0 L e 1 t 9B a )E l. R ,2 T 0 1 ( 9 Z ) h u eFt ra ( e Z l.e, h L2 u 0B 2 e -0 t R) al o . B ,2 (E 0 S 2 Ra 0 kT ) aag uc ( h S i a k et a g aRl u .o, c 2 h B0 i E1 e 9R t )T a l a ., ( 2 B 0 i 1 s 9 k ) e t a ( l B ., i s 2R k 0o 1 e B9 t E) a R l., T( 2 Ma 0 i 1 tr 9 a ) et ( a M l., i t 2R r 0 a o2 B e 0 t E ) a R l. T , ( 2 aL 0 i 2 n 0 e ) t al. ( , L 2 i 0 n R1 o e 9 t B) a E l. R , (T 2 M 0 a 1 in 9 ) e t al ( ., M 2D0 i P2 n R0 e )+ t B al A .,2 R 0 T 2 0)
+89.5 72.2 67.5 79.4 78.0 61.1 42.2
+89.5 72.2 67.5 79.4 78.0 61.1 42.2
+BARTlBargAe
+R
+- F
+T
+T
+large - FT
+78.8
+78.8
+62.5
+62.5
+62.4
+62.4
+77.4
+77.4
+74.0
+74.0
+60.5
+60.5
+42.1
+42.1
+Unified U Q n A ifiBeAdRQT - A F B T ART - FT 79.4 79.4 64.0 64.0 63.6 63.6 77.9 77.9 73.2 73.2 60.0 60.0 44.5 44.5
+T5 - FT 87.1 78.1 84.9 88.9 81.4 74 49.3
+T5 - FT 87.1 78.1 84.9 88.9 81.4 74 49.3
+UnifiedQA - FT 89.4 79.1 85.7 89.5 81.4 75.2 49.3
+UnifiedQA - FT 89.4 79.1 85.7 89.5 81.4 75.2 49.3
+Table 5: Fine-tuning UNIFIEDQA (last row) results in new state-of-the-art performance on 11 datasets. Further,
+it consistently improves upon fine-tuned T5 (2nd last row) by a margin ranging from 1% for CommonsenseQA
+(CQA)toasmuchas13%forARC-challenge. ‘(w/IR)’denotesrelevantinformationisretrievedandappendedas
+contextsentencesintheinputencoding. Datasetsmarkedwith*areusedinUNIFIEDQA’soriginaltraining.
+Model ↓ - Evaluated on → SQuAD11 SQuAD2 NarQA RACE OBQA ARC-easy ARC-hard MCTest BoolQ Avg Δ
+UnifiedQA 93.4 89.6 65.2 87.3 86.0 85.7 75.6 95.0 90.2 85.4
+excluding BoolQ 93.1 90.1 65.0 87.7 85.0 86.1 75.2 94.7 8.3 77.0 -8.4
+excluding SQuAD 2 95.3 47.3 65.4 87.7 84.8 85.9 75.5 95.3 90.5 81.3 -4.2
+excluding OBQA 93.6 89.3 65.2 87.4 77.8 85.7 74.0 94.7 90.1 84.2 -1.3
+excluding NarQA 93.6 89.8 52.5 87.7 85.6 86.3 75.9 95.6 89.9 84.2 -1.2
+excluding RACE 93.9 89.0 65.0 78.5 85.2 85.6 74.7 95.9 90.1 84.3 -1.2
+excluding ARC-easy 93.4 89.8 65.0 87.0 83.8 84.0 75.9 94.7 89.9 84.9 -0.6
+excluding ARC-hard 93.6 90.1 64.9 87.3 85.2 85.1 73.8 95.6 90.5 85.1 -0.4
+excluding MCTest 92.8 90.6 65.0 87.1 84.6 85.6 75.4 95.6 90.2 85.2 -0.2
+excluding SQuAD 1.1 92.6 90.3 65.3 87.4 85.8 86.5 75.9 95.3 90.7 85.6 0.1
+Table6: Theresultsofaleave-one-outablation. ThefirstrowindicatestheperformanceofUNIFIEDQAoneach
+datasetitwastrainedon. Therestoftherowsexcludeonedatasetatatime. Therowsaresortedbasedonthelast
+column:thedatasetwithbiggestcontributionappearfirst.The redhighlights indicatethetop3performancedrops
+foreachcolumn.
+reports the best previously published work. For FIEDQA has seen different formats, it should be
+several MC datasets that do not come with evi- positioned to achieve higher scores after a little
+dence paragraphs, we include two variants: one fine-tuning, compared to fine-tuning on a vanilla
+whereweusethemas-isandanotherthatusespara- T5 or BART model. This could be especially ef-
+graphs fetched via an Information Retrieval (IR) fective when a user has limited training data for
+systemasadditionalevidence,indicatedwith“w/ a target QA task (also shown in Appendix A.6.)
+IR”tags. WeusethesameIRsentencesasusedby Thisalsohighlightsthattheeffectivenessofcross-
+thebaselines: AristocorpusforARCandOBQA format training is not limited only to T5, but is
+datasets (Clark et al., 2019c), and 2-step IR for ratherageneraltrendfortext-to-textarchitectures.
+QASC (Khot et al., 2019). For NatQA, follow-
+6.4 Ablation: TrainingSetContributions
+ing (Min et al., 2020), we use the DPR retrieval
+engine (Karpukhin et al., 2020) to augment each We now perform a leave-one-out experiment to
+questionwithadditionalparagraphs. better understand the contribution of each seed
+We see that fine-tuning on UNIFIEDQA con- datasetto UNIFIEDQA.Wetakethesystemfrom
+sistentlydominatesfine-tuningonT5andBART, §3.2andassesshowstrongthemodeliswhenindi-
+respectively. It also dominates the best previous vidualseedtrainingdatasetsaredroppedfromthe
+scores on the datasets. Intuitively, since UNI- union. Theresultofthisexperimentissummarized
+1903
+
+in Table 6. It compares the performance of full in achieving successful results. Previous studies
+UNIFIEDQA (the first row) with ablated variants (Raffel et al., 2020) did not observe gains when
+thatexcludeoneseeddatasetatatime. Therows mixingtasksthatareverydifferent. Thekeyintu-
+aresortedbasedonthelastcolumn: datasetswith itionisthatamorecoherentchoiceoftasksismore
+highercontributionsappearfirst. likelytosucceed. Further,focusingonacoherent
+Looking at first few rows of the table, BoolQ, space of QA tasks/formats allows us to simplify
+SQuAD2.0,OBQA,NarQAarethetopfourcon- theinputbynotrequiring“prefixes”toexplicitly
+tributing datasets, each with a different format. definetasks/formats.
+SQuAD1.1hastheleastimportance,presumably
+becauseitismostlycoveredbySQuAD2.0. 8 Conclusion
+Thisstudysuggeststhatinordertobuildanef-
+Thequestion-answeringcommunityhasfruitfully
+fective unified QA system, it suffices to have a
+explored the design of strong models, but while
+relatively small set of datasets as long as the set
+stayingwithintheboundariesofindividualQAfor-
+includesrepresentativesfromeachformat.
+mats. Wearguedthatsuchboundariesareartificial
+andcanevenlimittheperformanceofsystems,be-
+7 Discussion
+causethedesiredreasoningabilitiesbeingtaught
+The key motivation for this work is the observa- andprobedarenottiedtospecificformats. Train-
+tion that nearly all prior efforts on QA research ing data in one format should, in principle, help
+werelimitedtotheboundariesdefinedbynarrow QA systems perform better even on questions in
+formats. Aformat-specificdesignwouldnotgen- anotherformat.
+eralize across QA datasets with slightly different Withthisintuitioninmind,wepresented UNI-
+definitions(e.g.,amodelbuiltforSQuADwould FIEDQA, a single pre-trained QA system based
+notworkforRACE).Additionally,suchadesign onthetext-to-textparadigm,seekingtobringuni-
+wouldpreventusfrombenefitingfromthelabeled fication across four common QA formats. We
+dataavailableinotherformats. Wechallengethis showedthatevenwithitssimplemulti-formattrain-
+view by advocating for approaches that combine ing methodology, UNIFIEDQA achieves perfor-
+seeminglydifferentdatasets. Webelievethatdevel- manceonparwith8dataset-specificexpertmodels
+opingQAsystemstargetedtoaspecificformatisa (§6.1),whilealsogeneralizingwelltomanyunseen
+conceptualbarrierforprogressinthefield. datasetsofseenformats(§6.2). Atthesametime,
+wedemonstratedthatUNIFIEDQAisastrongstart-
+Factorsaffectinggeneralization. Formatisnot
+ingpointforbuildingQAsystems: itcanachieve
+the only factor affecting generalization across
+state-of-the-artperformancebysimplyfine-tuning
+datasets. Weadditionallystudiedthevalueofother
+ontargetdatasets(6.3).
+factorsincludingdatasetsizeanddomain(vocabu-
+Wehopethiseffortwillinspireafuturelineof
+lary,topic,andstyle)inimprovinggeneralization.
+work in the QA and NLP communities, moving
+We observed that larger datasets often help with
+towardsmoregeneralandbroadersystemdesigns.
+generalization,butnotalways(§5);e.g.,RACEor
+We leave extensions of UNIFIEDQA to other for-
+OBQAshowsimilarbenefits(Fig.3),eventhough
+mats such asto direct-answer questions (Roberts
+RACEismuchlargerthanOBQA.Weobserveda
+etal.,2020)asapromisingavenueforfuturework.
+similarphenomenonwithdomain: similardomains
+helpwithtransfer,butthatisnotalwaysthecase.
+Acknowledgments
+For example, while BoolQ questions, similar to
+The authors would like to thank Collin Raffel,
+SQuAD, are accompanied with Wiki paragraphs,
+AdamRoberts,andNicholasLouriefortheirhelp
+theybarelybenefiteachother. Overall,thefactors
+with the T5 framework and for providing feed-
+affecting generalization are not well-understood,
+back on an earlier version of this work. The au-
+leavingroomforfutureinvestigations.
+thors would like to acknowledge grants by ONR
+Unifying QA formats and text-to-text models. N00014-18-1-2826andDARPAN66001-19-2-403,
+While UNIFIEDQA is built based using existing andgiftsfromtheSloanFoundationandtheAllen
+text-to-text models (Radford et al., 2019a; Raf- InstituteforAI.Moreover,theauthorswouldlike
+fel et al., 2020), we emphasize that the choice of to thank members of the Allen Institute for AI,
+tasks for multi-task learning plays a crucial role UW-NLP,andtheH2LabattheUniversityofWash-
+1904
+
+ingtonfortheirvaluablefeedbackandcomments. Jacob Devlin, Ming-Wei Chang, Kenton Lee, and
+TPU machines for conducting experiments were Kristina Toutanova. 2019. BERT: Pre-training of
+deep bidirectional transformers for language under-
+providedbyGoogle.
+standing. InNAACL.
+Dheeru Dua, Ananth Gottumukkala, Alon Talmor,
+References Matt Gardner, and Sameer Singh. 2019a. Compre-
+hensivemulti-datasetevaluationofreadingcompre-
+Naveen Arivazhagan, Ankur Bapna, Orhan Firat, hension. In2ndWorkshoponMachineReadingfor
+Dmitry Lepikhin, Melvin Johnson, Maxim Krikun, QuestionAnswering.
+Mia Xu Chen, Yuan Cao, George Foster, Colin
+Cherry, et al. 2019. Massively multilingual neural Dheeru Dua, Yizhong Wang, Pradeep Dasigi, Gabriel
+machine translation in the wild: Findings and chal- Stanovsky,SameerSingh,andMattGardner.2019b.
+lenges. InNAACL. DROP:Areadingcomprehensionbenchmarkrequir-
+ingdiscretereasoningoverparagraphs. InNAACL.
+Pratyay Banerjee and Chitta Baral. 2020. Knowl-
+AdamFisch,AlonTalmor,RobinJia,MinjoonSeo,Eu-
+edge fusion and semantic knowledge ranking for
+nsol Choi, and Danqi Chen. 2019. MRQA 2019
+open domain question answering. arXiv preprint
+shared task: Evaluating generalization in reading
+arXiv:2004.03101.
+comprehension. In2ndWorkshoponMachineRead-
+ingforQuestionAnswering,atEMNLP.
+Yonatan Bisk, Rowan Zellers, Ronan Le Bras, Jian-
+feng Gao, and Yejin Choi. 2020. Piqa: Reasoning
+MattGardner,YoavArtzi,VictoriaBasmova,Jonathan
+aboutphysicalcommonsenseinnaturallanguage. In
+Berant, Ben Bogin, Sihao Chen, Pradeep Dasigi,
+AAAI.
+Dheeru Dua, Yanai Elazar, Ananth Gottumukkala,
+et al. 2020. Evaluating models’ local decision
+Rich Caruana. 1997. Multitask learning. Machine
+boundariesviacontrastsets. InEMNLP-Findings.
+learning,28(1):41–75.
+VladimirKarpukhin,BarlasOg˘uz,SewonMin,Ledell
+Christopher Clark, Kenton Lee, Ming-Wei Chang, Wu,SergeyEdunov,DanqiChen,andWen-tauYih.
+Tom Kwiatkowski, Michael Collins, and Kristina 2020. Dense passage retrieval for open-domain
+Toutanova.2019a. Boolq: Exploringthesurprising questionanswering. InEMNLP.
+difficulty of natural yes/no questions. In NAACL-
+HLT. NitishShirishKeskar,BryanMcCann,CaimingXiong,
+and Richard Socher. 2019. Unifying question an-
+Kevin Clark, Minh-Thang Luong, Urvashi Khandel- swering, text classification, and regression via span
+wal, Christopher D Manning, and Quoc Le. 2019b. extraction. arXivpreprintarXiv:1904.09286.
+BAM! Born-again multi-task networks for natural
+languageunderstanding. InACL,pages5931–5937. Daniel Khashabi, Snigdha Chaturvedi, Michael Roth,
+Shyam Upadhyay, and Dan Roth. 2018. Looking
+PeterClark,IsaacCowhey,OrenEtzioni,TusharKhot, beyond the surface: A challenge set for reading
+Ashish Sabharwal, Carissa Schoenick, and Oyvind comprehensionovermultiplesentences. InNAACL-
+Tafjord. 2018. Think you have solved question an- HLT.
+swering? Try ARC, the AI2 reasoning challenge.
+DanielKhashabi,TusharKhot,andAshishSabharwal.
+ArXiv,abs/1803.05457.
+2020. More bang for your buck: Natural perturba-
+tionforrobustquestionanswering. InEMNLP.
+Peter Clark, Oren Etzioni, Tushar Khot, Bha-
+vana Dalvi Mishra, Kyle Richardson, Ashish Sab-
+Tushar Khot, Peter Clark, Michal Guerquin, Peter
+harwal, Carissa Schoenick, Oyvind Tafjord, Niket
+Jansen, and Ashish Sabharwal. 2019. QASC: A
+Tandon, Sumithra Bhakthavatsalam, et al. 2019c.
+dataset for question answering via sentence compo-
+From ’F’ to ’A’ on the NY Regents science ex-
+sition. InAAAI.
+ams: An overview of the Aristo project. ArXiv,
+abs/1909.01958. Tomás Kociský, Jonathan Schwarz, Phil Blunsom,
+ChrisDyer,KarlMoritzHermann,GáborMelis,and
+Peter Clark, Oren Etzioni, Tushar Khot, Ashish Sab- EdwardGrefenstette.2018. Thenarrativeqareading
+harwal, Oyvind Tafjord, Peter Turney, and Daniel comprehensionchallenge. TACL,6:317–328.
+Khashabi.2016. Combiningretrieval,statistics,and
+inference to answer elementary science questions. Tom Kwiatkowski, Jennimaria Palomaki, Olivia Red-
+InAAAI. field, Michael Collins, Ankur P. Parikh, Chris Al-
+berti, Danielle Epstein, Illia Polosukhin, Jacob De-
+Pradeep Dasigi, Nelson F. Liu, Ana Maraso- vlin, Kenton Lee, Kristina Toutanova, Llion Jones,
+vic´, Noah A. Smith, and Matt Gardner. 2019. MatthewKelcey,Ming-WeiChang,AndrewM.Dai,
+Quoref: A reading comprehension dataset with Jakob Uszkoreit, Quoc Le, and Slav Petrov. 2019.
+questions requiring coreferential reasoning. In Natural questions: A benchmark for question an-
+EMNLP/IJCNLP. sweringresearch. TACL,7:453–466.
+1905
+
+Guokun Lai, Qizhe Xie, Hanxiao Liu, Yiming Yang, Haoruo Peng, Daniel Khashabi, and Dan Roth. 2015.
+and Eduard H. Hovy. 2017. RACE: Large-scale Solving hard coreference problems. In NAACL,
+reading comprehension dataset from examinations. pages809–819.
+InEMNLP.
+Alec Radford, Jeff Wu, Rewon Child, David Luan,
+Zhenzhong Lan, Mingda Chen, Sebastian Goodman, DarioAmodei,andIlyaSutskever.2019a. Language
+Kevin Gimpel, Piyush Sharma, and Radu Soricut. modelsareunsupervisedmultitasklearners.
+2019. Albert: A lite bert for self-supervised learn-
+Alec Radford, Jeffrey Wu, Rewon Child, David Luan,
+ingoflanguagerepresentations. InICLR.
+Dario Amodei, and Ilya Sutskever. 2019b. Lan-
+Hector J. Levesque, Ernest Davis, and Leora Morgen- guage models are unsupervised multitask learners.
+stern. 2011. The winograd schema challenge. In OpenAIBlog,1(8):9.
+KR.
+ColinRaffel,NoamShazeer,AdamRoberts,Katherine
+Lee, Sharan Narang, Michael Matena, Yanqi Zhou,
+Mike Lewis, Yinhan Liu, Naman Goyal, Mar-
+WeiLi, andPeterJLiu.2020. Exploringthelimits
+jan Ghazvininejad, Abdelrahman Mohamed, Omer
+of transfer learning with a unified text-to-text trans-
+Levy, Ves Stoyanov, and Luke Zettlemoyer.
+former. JMLR.
+2020. BART:Denoisingsequence-to-sequencepre-
+trainingfornaturallanguagegeneration,translation,
+Pranav Rajpurkar, Robin Jia, and Percy Liang. 2018.
+andcomprehension. InACL.
+Know what you don’t know: Unanswerable ques-
+tionsforsquad. InACL.
+Chin-Yew Lin, Guihong Cao, Jianfeng Gao, and Jian-
+Yun Nie. 2006. An information-theoretic approach PranavRajpurkar,JianZhang,KonstantinLopyrev,and
+toautomaticevaluationofsummaries. InNAACL. PercyLiang.2016. SQuAD:100,000+questionsfor
+machinecomprehensionoftext. InEMNLP.
+KevinLin,OyvindTafjord,PeterClark,andMattGard-
+ner.2019. Reasoningoverparagrapheffectsinsitu- Matthew Richardson, Christopher J. C. Burges, and
+ations. In 2nd Workshop on Machine Reading for Erin Renshaw. 2013. Mctest: A challenge dataset
+QuestionAnswering,atEMNLP. fortheopen-domainmachinecomprehensionoftext.
+InEMNLP.
+YinhanLiu,MyleOtt,NamanGoyal,JingfeiDu,Man-
+dar Joshi, Danqi Chen, Omer Levy, Mike Lewis, AdamRoberts,ColinRaffel,andNoamShazeer.2020.
+Luke Zettlemoyer, and Veselin Stoyanov. 2019. Howmuchknowledgecanyoupackintotheparam-
+Roberta: A robustly optimized bert pretraining ap- etersofalanguagemodel? InEMNLP.
+proach. arXivpreprintarXiv:1907.11692.
+MrinmayaSachanandEricXing.2016. Easyquestions
+BryanMcCann,NitishShirishKeskar,CaimingXiong, first? a case study on curriculum learning for ques-
+andRichardSocher.2018. Thenaturallanguagede- tionanswering. InACL,pages453–463.
+cathlon: Multitask learning as question answering.
+Keisuke Sakaguchi, Ronan Le Bras, Chandra Bhaga-
+arXivpreprintarXiv:1806.08730.
+vatula, and Yejin Choi. 2020. WINOGRANDE: an
+TodorMihaylov,PeterClark,TusharKhot,andAshish adversarialwinogradschema challenge atscale. In
+Sabharwal.2018. Canasuitofarmorconductelec- AAAI.
+tricity?anewdatasetforopenbookquestionanswer-
+Maarten Sap, Hannah Rashkin, Derek Chen, Ronan
+ing. InEMNLP.
+Le Bras, and Yejin Choi. 2019. Social iqa: Com-
+monsense reasoning about social interactions. In
+Sewon Min, Danqi Chen, Hannaneh Hajishirzi, and
+EMNLP-IJCNLP,pages4453–4463.
+Luke Zettlemoyer. 2019. A discrete hard EM ap-
+proach for weakly supervised question answering.
+EladSegal,AviaEfrat,MorShoham,AmirGloberson,
+InEMNLP/IJCNLP.
+and Jonathan Berant. 2019. A simple and effec-
+tive model for answering multi-span questions. In
+SewonMin,JulianMichael,HannanehHajishirzi,and
+EMNLP.
+LukeZettlemoyer.2020. AmbigQA:Answeringam-
+biguousopen-domainquestions. InEMNLP. AlonTalmorandJonathanBerant.2019. Multiqa: An
+empiricalinvestigationofgeneralizationandtransfer
+Arindam Mitra, Pratyay Banerjee, Kuntal Kumar Pal,
+inreadingcomprehension. InACL.
+SwaroopMishra,andChittaBaral.2020. Howaddi-
+tionalknowledgecanimprovenaturallanguagecom- Alon Talmor, Jonathan Herzig, Nicholas Lourie, and
+monsensequestionanswering. arXiv: Computation Jonathan Berant. 2019. Commonsenseqa: A ques-
+andLanguage. tion answering challenge targeting commonsense
+knowledge. InNAACL-HLT.
+Kosuke Nishida, Kyosuke Nishida, Masaaki Nagata,
+Atsushi Otsuka, Itsumi Saito, Hisako Asano, and AdamTrischler,TongWang,XingdiYuan,JustinHar-
+JunjiTomita.2019. Answeringwhilesummarizing: ris, Alessandro Sordoni, Philip Bachman, and Ka-
+Multi-task learning for multi-hop qa with evidence heer Suleman. 2017. Newsqa: A machine compre-
+extraction. InACL. hensiondataset. InRep4NLP@ACL.
+1906
+
+Zhuosheng Zhang, Junjie Yang, and Hai Zhao. 2020.
+Retrospective reader for machine reading compre-
+hension. ArXiv,abs/2001.09694.
+Chen Zhu, Yu Cheng, Zhe Gan, Siqi Sun, Tom Gold-
+stein,andJingjingLiu.2020. Freelb: Enhancedad-
+versarialtrainingfornaturallanguageunderstanding.
+InICLR.
+1907

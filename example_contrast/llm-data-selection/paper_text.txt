@@ -1,0 +1,1005 @@
+Smaller Language Models are capable of selecting Instruction-Tuning
+Training Data for Larger Language Models
+∗,♢ ∗,♢ ♡,♢,♠
+DheerajMekala AlexNguyen JingboShang
+♢
+DepartmentofComputerScience&Engineering,UniversityofCaliforniaSanDiego
+♡
+Halıcıog˘luDataScienceInstitute,UniversityofCaliforniaSanDiego
+{dmekala, atn021, jshang}@ucsd.edu
+Abstract
+54 53.68
+Instruction-tuning language models has be- 53.21 53.34
+comeacrucialstepinaligningthemforgeneral 53
+use. Typically,thisprocessinvolvesextensive
+trainingonlargedatasets,incurringhightrain-
+52 51.74
+ingcosts. Inthispaper,weintroduceanovel
+training data selection based on the learning
+percentageofthesamples. Weassertthatcur- 51
+rent language models possess the capability
+to autonomously select high-quality training 50
+data, leadingtocomparableorimprovedper-
+formance compared to training on the entire 350M 1.3B 2.7B 6.7B
+dataset. Ourexperimentsspandifferent-sized RankingSource
+models,revealingthatthischaracteristicholds
+for models ranging from 1B (small) to 13B
+(large)insize.Moreover,wedemonstrateanin-
+terestingfindingthatthedatahardnesstransfers
+acrossmodelsizes,andasmaller350Mmodel
+caneffectivelycuratehigh-qualitytrainingdata
+withhardsamplesforalarger13Bmodel,re-
+sulting in an equally or superior instruction-
+tunedmodelcomparedtotrainingonthecom-
+pletedataset. Utilizingopen-sourcedOPTand
+Llama-2modelsupto13Binsize,twopublicly
+available instruction-tuning training datasets
+andevaluatedbybothautomaticmetrics&hu-
+mans, ourpaperintroducesanovelapproach
+totrainingdataselection,showcasingamore
+efficientalternative.
+1 Introduction
+Instructiontuningempowerslargelanguagemod-
+els(LLMs)togeneralizetonoveltasksandinstills
+an instruction-following characteristic, marking
+the initial stride towards aligning them for gen-
+eraluse(Sanhetal.,2022;Weietal.,2022,2021;
+Chungetal.,2022;Weietal.,2022). Thisprocess
+involvesfine-tuninglanguagemodelswithexten-
+sivesetsof real(Mishraetal., 2021;Wangetal.,
+2022b)and/orsyntheticinstructions(Wangetal.,
+∗EqualContribution
+♠CorrespondingAuthor
+etarniW
+Figure1: ThewinrateofOPT-13Bmodeltrainedon
+10%datasub-sampledbysmallerOPTmodels(350M,
+1.3B,2.7B)fromAlpacaData,iscomparedagainstthe
+OPT-13B model trained on the full dataset. All win
+ratesexceed50,indicatingevenasmaller350Mdataset
+cancuratehigh-qualitydataforalarger13Bmodel.
+2022a; Honovich et al., 2023). Given that these
+datasetsaretypicallyvast,encompassingthousands
+ofsamples,thetrainingcostsassociatedwiththis
+approacharenotablyhigh.
+Past research into the memorization effects
+of deep neural networks have revealed a ten-
+dencytomemorizeeasyinstancesfirstandgradu-
+allylearnmorechallenginginstancestowardsthe
+end(Arpitetal.,2017;Geifmanetal.,2019;Zhang
+et al., 2021; Mekala et al., 2022a). Additionally,
+(Swayamdipta et al., 2020) show that ambiguous
+and hard samples in training data are sufficient
+forachievinggoodgeneralization. Theprocessof
+data selection, wherein subsets are chosen from
+extensivetrainingdatatoachievesuperiorperfor-
+mance,hasattractedsignificantattentionamongre-
+searchersrecently. Earlierstudiesinvolvedmanual
+featureengineeringofvariousindicatorsfromthe
+data(Caoetal.,2023),traininglargecustommod-
+els(Lietal.,2023a), oremployingclosedLLMs
+likeGPT-3.5(Chenetal.,2024)fordataselection.
+4202
+beF
+61
+]LC.sc[
+1v03401.2042:viXra
+
+In this paper, we delve into the measurement 2 ExperimentSetup
+ofsampledifficultyfromthemodel’sperspective.
+We design controlled experiments to empirically
+Drawing inspiration from the learning order met-
+validate our assertions. Our experimental setup
+ric in (Mekala et al., 2022a), we propose a novel
+encompasses language models spanning various
+dataselectionmethodthatutilizesthelearningper-
+familiesandsizes,alongsidemultipledatasets,the
+centage as a difficulty metric that the model can
+specificsofwhicharedetailedbelow.
+use to self-rank its training data. Essentially, the
+more learning that occurs in earlier epochs, the
+2.1 LanguageModels&Evaluation
+easier the sample is considered. We then select
+WeuseOPT(1.3B,2.7B,6.7B,13B)andLlama-2
+the most difficult sample subsets based on this
+(7B,13B)forexperiments. Wefine-tuneallmod-
+ranking and instruction-tune a language model.
+elsforthreeepochsonthreeNVIDIAA100GPUs.
+Our experiments involve two instruction-tuning
+Forthecomparisonoflanguagemodels,weemploy
+datasets, Alpaca-Data (Taori et al., 2023), and
+AlpacaEval—anautomatedevaluatorthattasksa
+Dolly (Conover et al., 2023), with performance
+largerlanguagemodelwithselectingthesuperior
+measured using automated metrics such as Al-
+response from two LMs. AlpacaEval offers an
+pacaEval(Lietal.,2023b)andhumanevaluation.
+evaluation set comprising 805 samples, designed
+Ourmainfindingsindicatethatlanguagemodels
+toassessgeneralinstruction-followingcapabilities
+can autonomously select training data, achieving
+by combining data from various sources, includ-
+performance equal to or better than training on
+ing self-instruct (Wang et al., 2022a), anthropic
+theentiredataset. Furthermore,thischaracteristic
+3
+helpfulness , open assistant (Kopf et al., 2023),
+scalesacrossdifferentmodelsizes, rangingfrom
+4
+1 Koala ,andVicuna(Chiangetal.,2023)evaluation
+smallerones(1B)tolargerones(13B) inparame-
+sets. While AlpacaEval provides various options
+ters. Asthesizeofthelanguagemodelincreases,
+forthejudgelanguagemodel,weoptforGPT-3.5
+weobserveaconsistentreductionintheminimum
+(gpt-3.5-turbo-16k-0613) (OpenAI, 2023) due to
+amountofdataneededtosurpasstheperformance
+itscost-effectiveness.
+of a model trained on the entire dataset. Interest-
+ingly,weobservethatthedatahardnessalsotrans-
+2.2 Data
+fers across models, meaning samples considered
+WeexperimentonAlpaca-Data(Taorietal.,2023)
+difficultbysmallermodelsaresimilarlychalleng-
+andDolly(Conoveretal.,2023)datasets. Alpaca-
+ingforlargermodels. Moreover,wenotethatthis
+Datacomprises52,000samplesgeneratedthrough
+transferabilityimproveswiththesizeofthesmaller
+theself-instructmethodbypromptingtext-davinci-
+model, eventually achieving comparable quality,
+003 with 175 human-written seed instruction-
+beyond a size threshold, to that attained by self-
+output pairs (Wang et al., 2022a). Dolly, on the
+selection conducted by larger models. Our study
+other hand, consists of 15,000 human-generated
+employsopen-sourcedmodelssuchasOPT(Zhang
+samples.
+etal.,2022)andLlama-2(Touvronetal.,2023)to
+supportthesefindings.
+3 LP: LearningPercentageasaDifficulty
+Theremainderofthepaperisstructuredasfol-
+Metric
+lows: initially,wedescribetheexperimentalsetup
+encompassing the language models, the datasets Theconceptoflearningorder(Dongetal.,2021;
+employed,andtheevaluationmetricsutilized(sec- Mekala et al., 2022a) is designed to assess the
+tion 2). Subsequently, we present our learning quality of a sample in the context of a weakly-
+percentage-baseddifficultymetricandanalyzeitin supervised classification problem (Mekala et al.,
+detail(section3). Followingthis,weoptimizethe 2022b; Mekala and Shang, 2020). The learning
+proposedmetricandintroduceanequallyeffective, order of a data point is defined as the epoch at
+approximate, and faster metric (section 4). Ulti- whichitislearnedduringtraining,preciselywhen
+mately,weanalyzethechallengingdataidentified the model’s predicted label aligns with the given
+throughthismetric(section5). ground truth. To adapt this concept to the text
+2
+Wepubliclyreleasethecodehere .
+3https://huggingface.co/datasets/Anthropic/
+1Due to limitations in our compute, the largest size we hh-rlhf/viewer/Anthropic--hh-rlhf/test
+wereabletotrainis13B. 4https://github.com/arnav-gudibande/
+2https://github.com/dheeraj7596/Small2Large koala-test-set
+
+60 59
+56 56
+51 51 51
+50 48 49 49 48
+44
+42
+40 38
+36 36
+35
+OPT1.3B OPT2.7B OPT6.7B Llama-27B
+etarniW
+33%ClustRand 33%HighLP(1) 33%MidLP(1) 33%LowLP(1)
+(a) Dollydataset
+55 54
+53
+52
+50 50
+50 49
+48 48 48 48 48
+47
+45
+43 43
+42
+40
+40
+OPT1.3B OPT2.7B OPT6.7B OPT13B
+etarniW
+33%ClustRand 33%HighLP(1) 33%MidLP(1) 33%LowLP(1)
+(b) Alpaca-Data
+Figure2: Wepartitiondatasetsintothreeequal-sizedbucketsbasedontheirLP(1)scores. Wetrainamodelper
+bucketandreportitswinrateagainsttheonetrainedonthecompletedataset. ThemodelusedtocomputeLP(1)
+scoresandtrainedisdepictedontheX-axisandthewinrateontheY-axis. Weobservethemodeltrainedonthe
+lowestLP(1)values(33%LowLP(1))exhibitssuperiorperformancecomparedtotheothers.
+generation problem, we introduce the notion of Mekalaetal.,2022a),ahigherlearningpercentage
+learningpercentage. intheearlyepochsimplieseasy-to-learnsamples.
+Foradatapointafterepoch-i,thelearningper- Sincelanguagemodelsareknowntolearnmostof
+centage is defined as the percentage drop in per- the information in just one epoch (Komatsuzaki,
+plexityduringepoch-icomparedtothetotaldrop 2019; Hoffmann et al., 2022; Zhang et al., 2022;
+in perplexity by the end of training. Assuming a Touvronetal.,2023),weconsiderLP(1)torank
+languagemodelisfine-tunedfornepochs,withP thetrainingdata.
+i
+denoting the perplexity of a sample at the end of The diversity of training data is a pivotal at-
+epoch-iandP indicatingitsperplexityatthebe- tributeforachievinghighqualityandoptimalper-
+0
+ginningoftraining,thelearningpercentageLP(i) formance (Sorscher et al., 2022; Tirumala et al.,
+attheendofepoch-iismathematicallydefinedas 2023). To enhance this diversity, we employ k-
+follows: meansclusteringonthesentenceembeddingsgen-
+LP(i) = P i−1 −P i (1) erated by the all-MiniLM-L6-v2 model 5 on the
+P −P entire training dataset, ensuring that each cluster
+0 n
+containsaminimumaverageof50samples. Asa
+Ahigherlearningpercentageatearlierepochsin-
+result, the Alpaca-Data yields 1000 clusters with
+dicatesthatmajorityofthelearningoccursduring
+an average of 52 samples per cluster, while the
+the initial epochs. Given the deep neural models
+Dollydatasetyields300clusterswithanaverage
+typicallylearneasiersamplesinitiallyandprogress
+of50samplespercluster. Subsequently,werank
+to more challenging samples later (Arpit et al.,
+2017; Geifman et al., 2019; Zhang et al., 2021; 5https://www.sbert.net
+
+57
+55
+55
+53
+52
+50 50
+50
+45
+41 41
+40
+Llama-27B Llama-213B
+etarniW
+33%ClustRand 33%HighLP(1) 55
+33%MidLP(1) 33%LowLP(1)
+50
+45
+40
+1 3 5 10 25 33
+k%LowLP(1)
+Figure 3: We partition Alpaca-Data into three equal-
+sizedbucketsbasedontheirLP(1)scores. Themodel
+used to compute LP(1) scores and trained is on the
+X-axisandthewinrateontheY-axis. Weobservethe
+modeltrainedonthelowestLP(1)values(33%Low
+LP(1))exhibitssuperiorperformance.
+thetrainingdatausingLP(1)inascendingorder
+andselectthetop-k%ofsamplesfromeachcluster,
+i.e.,thesamplesthatarelearnedtheleastinthefirst
+epoch.
+3.1 LP(1)-basedDataSelection
+We calculate the LP(1) scores of the training
+datasetandorganizeitinascendingorderaccord-
+ingtothesescores. Subsequently,wepartitionthe
+dataset into three equal buckets. To enhance the
+diversity,thispartitioningisdonepercluster. The
+bucketcharacterizedbythelowestLP(1)values
+(33%LowLP(1))representsthemostchalleng-
+ingdataineachcluster,whilethebucketwiththe
+highestvaluescorrespondstotheleastchallenging
+data(33%HighLP(1))ineachcluster.
+Wetrainonemodelperbucketandcalculatethe
+winrateagainstthemodeltrainedonthecomplete
+trainingdataset. Wealsopresenttheperformance
+of the model trained on randomly selected 33%
+datafromeachcluster(33%ClustRand)forref-
+erence. The AlpacaEval win rate scores of the
+Llama-2 7B and 13B models trained on individ-
+ualbucketsinAlpaca-DataareplottedinFigure3.
+Similarly,thewinratescoresofOPT1.3B,2.7B,
+6.7B,andLlama-27BmodelsontheDollydataset
+are shown in Figure 2(a). We observe that mod-
+elstrainedonthebucketassociatedwiththelow-
+estLP(1)scores(33%LowLP(1))consistently
+achievescoresexceeding50,indicatingthattrain-
+etarniW
+1.3B
+2.7B
+6.7B
+13B
+Figure4:WeconsiderAlpaca-Data,varythepercentage
+ofdataselected,andplotthewinrateofOPTmodels,
+trained on the selected data in comparison to models
+trainedonthecompletedataset. Theminimumpercent-
+ageofdatanecessaryforeachmodeltosurpassthe50%
+thresholdishighlightedwith .
+ingonchallengingsamplesaloneisadequatefora
+robustinstruction-tuningmodel. Furthermore,our
+analysisrevealsthatthemodeltrainedonthelowest
+LP(1)scores(33%LowLP(1))consistentlyout-
+performsthosetrainedonmidandhighbucketsby
+asignificantmargin. Forexample,inFigure2(a),
+OPT2.7Btrainedonthelowbucketoutperforms
+themidbucketby10pointsandthehighbucketby
+23points. Thisunderscoresacompellingargument
+thatleveragingdifficultdatayieldsmorefavorable
+outcomescomparedtotrainingoneasierdatasets.
+The33%Highbucketresultsinworseperformance
+thanrandomselectionforallmodels,highlighting
+thateasysamplesaloneareinsufficient.
+PerformancevsScale Toinvestigatethevaria-
+tion of this trait with scale, we plot the win rate
+scores of OPT (1.3B, 2.7B, 6.7B, 13B) models
+trainedoneachbucketwithintheAlpaca-Datain
+Figure 2(b). Remarkably, all models trained on
+the low bucket consistently achieve win rates ex-
+ceeding50,surpassingthoseofthecorresponding
+midandhighbuckets. Thisconsistenttrendacross
+differentmodelscalesunderscorestherobustness
+oftheobservedpattern.
+Largermodelsneedfewersamples Tofurther
+analyzetherequiredamountofdifficultdatanec-
+essary for training high-quality instruction-tuned
+models of varying sizes, we analyze OPT (1.3B,
+2.7B,6.7B,13B)modelsbyvaryingthepercentage
+ofselecteddatainAlpaca-Dataandplottheirwin
+ratesagainstthecorrespondingmodelstrainedon
+the complete dataset in Figure 4. Strikingly, we
+
+observeadownwardtrendintheminimumpercent- formanceof13Bmodel. Withonlya1.4-pointdrop
+age of difficult data required (denoted by ) for inaveragewinrate,evenasmall350Mmodelcan
+achievingawinrateofatleast50withanincrease beleveragedforcuratingtrainingdataforalarge
+in the model’s size. For example, the OPT-13B 13Bmodel. Thisdemonstratesthatthedatahard-
+modeloutperformsitsfulldatasetcounterpartwith nesstransfersefficientlyfromasmallermodeltoa
+only3%ofthetrainingdata. Thissuggeststhatas largerone,improvingwiththesizeofthesmaller
+themodel’ssizeincreases,theamountofchalleng- modelandeventuallymatchingself-selectionper-
+ingdatarequireddecreases,albeitthenecessityfor formancebeyondaspecificsizethreshold(2.7B).
+suchdifficultdatapersists. Thisfindingprovides
+LP(1)RankingAnalysis-Kendall-Tauscores:
+additionalinsightintotheexceptionalperformance
+Weconductacomparativeanalysisofrankingsbe-
+exhibited by the Llama-65B model when trained
+tweensmallerandlargermodelstogaindeeperin-
+with1000difficultsamplesin(Zhouetal.,2023).
+sightsintothetransferabilityofdatahardness. We
+3.2 IsDataHardnesstransferable? deriveLP(1)scoresfrommultiplesmallermodels
+andalargermodel,followedbythecomputationof
+In the previous section, we observed challenging
+Kendall-taucorrelationcoefficientsbetweenrank-
+training data yields high-performing instruction-
+ingsbasedontheirrespectivescores. TheKendall-
+tunedmodels. Inthissection,weinvestigatetrans-
+tauscorerangesfrom-1to+1,withahigherpos-
+ferability of data hardness, specifically whether
+itive score indicating a stronger correlation. The
+samples deemed difficult by a smaller model are
+Kendall-tau scores of LP(1) derived from OPT-
+alsoconsidereddifficultbyalargermodel.
+models(350M,1.3B,2.7B,6.7B)againstOPT13B
+Toassessthis,weconsiderasmallerandalarger
+on both Alpaca-Data and Dolly datasets are pre-
+model. WeobtainLP(1)scoresusingthesmaller
+sentedinTable1. Wenotethatallscoresareposi-
+model,followingwhichweselectthetop-k%(in
+tive,indicatingapositivecorrelation. Notably,we
+ascending order) of training data based on these
+observeaconsistentincreaseincorrelationwiththe
+scores. Subsequently, we train the larger model
+increaseinsizeoftherankingsourcemodel. Fur-
+using this selected dataset. For each experimen-
+thermore,wealsocomputetheKendall-tauscores
+talconfiguration,wecalculatethewinrateofthe
+between rankings from the Llama-2 7B and 13B
+largermodeltrainedontheselecteddataagainstit
+models. ForAlpaca-Data,thescoreis0.782,and
+whentrainedonthecompletedataset.
+for Dolly, it is 0.775, respectively. These scores
+WeconsiderLlama-27Basthesmallermodel
+underscoretheeffectivetransferabilityofrankings
+andLlama-213Basthelargermodel. Wevarythe
+fromsmallermodelstolargerones.
+percentagedataselected,andplotthewinrateof
+Llama-213Btrainedonselecteddataincompari- LP(1) Ranking Analysis - Intersection over
+sontotheonefine-tunedontheentireAlpaca-Data union scores: We additionally calculate the
+datasetinFigure5(a)andforDollydatasetinFig- intersection-over-union(IOU)ofdatasamplesse-
+ure5(b)respectively. Wefindthattherankingof lectedbybothsmallerandlargermodels. Wevary
+theLlama-27Bmodeltransferseffectivelytothe the selected percentage of data and compute the
+13Bmodel,resultinginamodelofcomparableor IOUofsubsetschosenbythesmallerOPTmodels
+evenimprovedqualityinsomeinstances. Forexam- (350M,1.3B,2.7B,6.7B)withthelargerOPT13B
+ple,inFigure5(a),thewinrateoftheLlama-2-13B model on Alpaca-Data, presenting the results in
+modeltrainedon10%oftheAlpaca-Data,selected Figure6. Similarly,weplottheIOUofLlama-27B
+bythe7Bmodel,outperformstheself-rankingof withtheLlama-213BmodelontheAlpaca-Datain
+the13Bmodelby4points. Figure7. FromFigure6,foragivenpercentageof
+Similarly,weconsiderOPT(1.3B,2.7B,6.7B) dataselected,weobserveaconsistentriseinIOU
+models as smaller models and OPT 13B as the score with the increasing size of the model until
+larger model and plot the performance for the 2.7B,followedbyaplateau,aligningwiththeper-
+Alpaca-Data dataset in Figure 5(c) and for the formancetrenddepictedinFigure5(c). Moreover,
+DollydatasetinFigure9inAppendixA.2respec- forafixedmodelsizeinFigures6and7,theIOU
+tively. FromFigure5(c),weobservethattheperfor- scoreconsistentlyincreaseswiththeriseinthese-
+manceofthe13Bmodelincreaseswiththesizeof lecteddatapercentage. Thisfindingsuggeststhat
+thesmallermodelupto2.7Bandfurtherplateaus forselectingalargerpercentageofdata,asmaller
+whereiteventuallymatchestheself-selectionper- 350M model suffices. However, as the selected
+
+58
+56
+54
+Llama-27B Llama-213B
+(Self-Ranking)
+LP(1)RankingSource
+etarniW
+1%Low 3%Low 5%Low
+10%Low 25%Low 33%Low
+58
+56
+54
+52
+50
+Llama-27B Llama-213B
+(Self-Ranking)
+LP(1)RankingSource
+(a) Alpaca-Data,Llamamodels
+etarniW
+3%Low 10%Low 33%Low
+55
+54
+53
+52
+51
+350M 1.3B 2.7B 6.7B 13B
+(Self-Ranking)
+LP(1)RankingSource
+(b) Dollydataset,Llamamodels
+etarniW
+5%Low 10%Low
+25%Low 33%Low
+(c) Alpaca-Data,OPTmodels
+Figure5:Wevarythepercentageofselecteddatatotrain13Bmodelandconductacomparisonofwinratesobtained
+whendataisself-selectedbythe13Bmodelvsselectedbysmallermodels. Thesmallermodelusedismentioned
+ontheX-axisandthewinrateisontheY-axis. Weobservethatthedatahardnesstransfersfromsmallermodelsto
+13B,leadingtoimprovedorcomparableperformancecomparedto13Bmodeltrainedontheself-selecteddata.
+0.7
+0.6
+0.5
+0.4
+0.3
+0.2
+350M 1.3B 2.7B 6.7B
+LP(1)RankingSource
+noinUrevOnoitcesretnI
+1%Low 3%Low 5%Low
+10%Low 25%Low 33%Low
+0.7
+0.6
+0.5
+0.4
+1% 3% 5% 10% 25% 33%
+k%LowLP(1)
+Figure 6: IOU scores of Alpaca-Data data points se-
+lectedbysmallerOPTmodels(350M,1.3B,2.7B,6.7B)
+withOPT13Bmodelforvaryingpercentages.
+datapercentagedecreases,itisadvisabletoemploy
+alargermodeli.e. ≥2.7B.
+4 LP : AFaster&Approximate
+app
+LearningPercentageMetric
+It is worth noting that to compute LP(1), the
+model needs to be trained twice—first to obtain
+theperplexityscoresandrankthedata,andthento
+selectthedataandtrainthemodelagain. Recogniz-
+ingthiscomputationalinefficiency,wepresentan
+approximateversionofthelearningpercentage,de-
+notedasLP thatisfasterandequallyeffective
+app
+asLP.
+Languagemodelsareknowntotypicallylearn
+in 3 epochs and tend to memorize the data (Tiru-
+malaetal.,2022). Asaresult,weassumethatthe
+noinUrevOnoitcesretnI
+Figure7:Intersection-over-unionscoresofAlpaca-Data
+datapointsselectedbyLlama-27BwithLlama-213B
+modelforvaryingpercentages.
+Dataset 350M 1.3B 2.7B 6.7B
+Alpaca-Data 0.52 0.61 0.65 0.69
+Dolly 0.52 0.61 0.67 0.75
+Table1: Kendall-Tauscoresofrankingsfromdifferent
+smaller-sized OPT models(350M, 1.3B, 2.7B, 6.7B)
+againsttherankingfromlargeOPT-13Bmodel.
+perplexityattheendoftrainingP isconstantfor n
+allsamples. Mathematically,LP isdefinedas: app
+LP (i) = P i−1 −P i (2)
+app P
+0
+TocomputeLP (1),weonlyneedtotrainthe
+app
+modeloncefor1epoch,makingitmoreefficient.
+4.1 LP (1)vsLP(1): AComparison
+app
+WeconductacomparativeanalysisbetweenLP
+app
+andLP metricsontheAlpaca-Data. Weconsider
+
+3%Low 10%Low 33%Low Alpaca-Data Dolly
+Model Model
+LP app LP LP app LP LP app LP ClustRand Alpa ClustRand Alpa
+OPT2.7B 49.4 47.1 53.7 50.4 52.9 54.9 OPT1.3B 53.91 51.74 53.79 54.10
+OPT6.7B 50.0 48.9 52.6 52.1 52.7 51.1
+OPT2.7B 56.89 52.11 56.21 52.61
+Llama-27B 59.7 57.6 57.9 56.7 55.7 56.5
+OPT6.7B 59.13 54.47 57.27 55.09
+Llama-213B 56.5 56.4 54.0 54.3 55.3 54.8
+Llama-27B 55.60 53.17 58.76 54.66
+Table2: WecompareLP andLP onAlpaca-Data.
+app Table4: Thewinratesofmodelstrainedondatasub-
+Wepresentthewinratesofthemodeltrainedondiffer-
+sampled from Alpaca-Data and Dolly datasets based
+entpercentagesofselecteddatausingbothLP and
+app onLP arecomparedagainstotherbaselines(Clust
+LP againsttheonetrainedonthecompletedataset. app
+Rand & Alpagasus). We observe that all win rates
+exceed50, indicatingsuperiorperformanceandhigh-
+OPT Llama-2
+Dataset qualityselectionbyourmethod.
+1.3B 2.7B 6.7B 13B 7B 13B
+Alpaca-Data 0.53 0.55 0.60 0.61 0.64 0.62
+Dolly 0.59 0.59 0.61 0.64 0.60 0.58
+trained on the selected data using each method.
+Table3: Kendall-TauscoresbetweenLP andLP . Subsequently,wecomparetheperformanceofthe
+app
+We observe high positive scores indicating a positive instruction-tuned models using AlpacaEval and
+correlation. present the win rates of our model over the com-
+paredbaselines. Thewinratespost-trainingonthe
+Alpaca-Data and Dolly are presented in Table 4.
+different-sizedmodelsincludingOPT2.7B,6.7B,
+Notably, we observe win rates exceeding 50 for
+aswellasLlama-27Band13B.Thetrainingdatais
+allmodelstrainedonbothdatasets,indicatingthe
+rankedusingLP andLP metrics,respectively,
+app
+superiorqualityoftrainingdatasubsampledusing
+anddataselectionisperformedforvaryingpercent-
+ourmethod. Thesuperiorperformanceofsmaller
+ages of data. The win rate of the model trained
+OPT1.3Band2.7Bmodelstrainedonself-selected
+on selected data against the model trained on the
+data over Alpagasus, where the data is selected
+completedatasetiscomputedandpresentedinTa-
+byamuchlargerGPT-3.5model,underscoresthe
+ble2. Notably,weobservethatthemodeltrained
+effectivenessofourmethod.
+on data selected via LP outperforms its coun-
+app
+Additionally, we conduct another evaluation
+terparttrainedondataselectedviaLP acrossthe
+wherein a smaller model is employed to curate
+majorityofmodelsandvariouspercentages. This
+training data for a larger model utilizing the
+findingunderscorestheefficacyofLP asadata
+app
+selectionmetric,demonstratingitscomparableor
+LP
+app
+(1)metric. Subsequently,wetrainthelarger
+modelontheselecteddataandcompareitsperfor-
+evensuperiorperformancecomparedtoLP.
+mancewiththatofthesamemodeltrainedondata
+Wecalculatekendall-taucorrelationscoresbe-
+selected using Alpagasus. The win rates of OPT
+tween LP and LP on both Alpaca-Data and
+app
+6.7Bmodeltrainedon10%dataselectedbyOPT
+Dollydatasets,showninTable3. Weobservehigh
+350M, 1.3B and 2.7B models are 50.25, 51.24,
+positive scores, signifying a positive correlation
+and52.30respectively. Thewinratesexceed50%
+betweenthetwometrics,highlightingtheeffective-
+acrossallscenarios,indicatingthatasmallermodel
+nessofLP inaccuratelyapproximatingLP.
+app
+caneffectivelycuratetrainingdatausingourpro-
+4.2 ComparisonwithBaselines posedLP metric.
+app
+Inthissection,wecompareLP withtwobase-
+app
+4.3 HumanEvaluation
+lines. The first baseline, denoted as Clust Rand,
+randomlysamplesthesamenumberofsamplesas We compare the model trained on data selected
+our method from each cluster of the training set. usingourmethodwiththemodeltrainedoncom-
+Notably,thispreservesthediversityofthesubset pletedataset. Specifically,weconsiderLlama-27B
+whileremovingthedifficulty-awareranking. We modelandAlpaca-Data,andsubsample5%ofdata
+alsocomparewithAlpagasus(Alpa)(Chenetal., using LP (1) scores and train it. Additionally,
+app
+2024), which prompts GPT-3.5 to assign a diffi- wetrainanotherLlama-27BmodelonfullAlpaca-
+cultyratingandselectstraininginstancesdeemed Data. In this human evaluation, participants are
+difficult. Weselect10%ofthetrainingdatausing asked to provide an instruction, after which both
+eachmethodandconsiderOPT1.3B,2.7B,6.7B, modelsgeneratearesponse. Participantsarethen
+and Llama-2 7B models. These models are then promptedtochoosethebetterresponse,orifboth
+
+responseswereperceivedasequal. Importantly,the 2022; Wei et al., 2022, 2021; Chung et al., 2022;
+modelswerehiddenfromtheparticipants,ensuring Wei et al., 2022). Numerous datasets have been
+theywereunawareofwhichmodelcorresponded curatedforthispurpose,comprisingamultitudeof
+towhichresponse. Werecruited10studentswith samples(Mishraetal.,2021;Wangetal.,2022b).
+minimalpriorknowledgeoftheprojectforthiseval- Notably, there is a recent surge in the emergence
+uation. Intotal,wecollected151evaluations. Of ofsyntheticinstructionsanddatasets(Wangetal.,
+these,42evaluationsresultedinatie. In50evalua- 2022a; Honovich et al., 2023), each containing a
+tions,themodeltrainedonthefulldatasetwaspre- substantialnumberofsamples. Giventheongoing
+ferred,whilein58evaluations,participantsfound expansionofsamplerepositories,therearisesane-
+the model trained on 5% data selected using our cessitytoreconsiderdatahandlingstrategiesfrom
+methodtobebetter. Thisindicatesthatresponses an efficiency standpoint (Sorscher et al., 2022),
+from the model trained on 5% of the data were whichweaddressinthispaper.
+eitherbetterorofequalqualitycomparedtothose
+from the model trained on the complete dataset 6.2 DataSelection
+in66.2%ofinstances. Thisoutcomeprovidesan-
+Dataselectionservesthepurposeofsubsampling
+othervalidationforthesuperiorperformanceofour
+training samples to reduce training costs with no
+method.
+drop in performance. Noteworthy contributions
+in pre-training literature include (Tirumala et al.,
+5 Dissectingthedifficultdata
+2023), emphasizing the importance of diversity
+In this section, we analyze the characteristics of insub-sampleddataandadvocatingfortheselec-
+samplesidentifiedaschallengingbytheLP met- tionofprototypesfromeachcluster. (Abbasetal.,
+ric. We manually examine 250 samples selected 2023) extend this by removing semantic dedupli-
+from the 1% subset characterized by low LP(1) cates in the training data. (Sorscher et al., 2022)
+scores within the Alpaca-Data corpus, obtained propose a self-supervised pruning metric to fur-
+usingLlama-27B. therrefinedataselectionstrategies. Inthedomain
+We observe that these difficult samples are of instruction-tuning, (Cao et al., 2023) evaluate
+longer than the average, maintaining coherence various indicators and apply a regression model
+throughout. Specifically, the average response for data selection. (Chen et al., 2024) leverage
+length within the 1% Low LP(1) subset of GPT-3.5 to derive difficulty ratings for individ-
+Alpaca-Datais547characters,contrastingwiththe ual data samples. (Li et al., 2023a) propose an
+dataset’saverageof270. Thisobservationaligns instruction-followingdifficultymetricfordatase-
+with intuition, suggesting that models encounter lection purposes. In this paper, we introduce a
+difficulty in generating longer and coherent text, learningpercentage-basedmetricandillustrateits
+thusdeemingsuchinstancesaschallenging. efficacyinenablingsmallermodelstoselecttrain-
+ingdataforlargermodels.
+Wealsofoundsixnoisysamples,showninTa-
+ble 5, i.e. a noise rate of 2.4%. Notably, this
+7 Conclusion
+proportionissignificantlyhighercomparedtothe
+prevalenceobservedacrosstheentiredataset. Al-
+Inthispaper,weintroducealearningpercentage-
+6
+pacaDataCleaned ,ahuman-cleanedAlpaca-Data
+basedmetricforassessingthedifficultyofsamples.
+has eliminated 0.47% of noisy samples from the
+Wedemonstratethatlanguagemodelsrangingfrom
+originaldataset. Thisunderscoresthatthesubset
+1Bto13Bsizescanself-selecthigh-qualitytrain-
+ofmostchallengingsamplesidentifiedbyLP(1)
+ing data by employing this metric. Additionally,
+encompassesnoisyinstancesaswell. Addressing
+weempiricallyvalidatethetransferabilityofdata
+thisissuerequiresfutureinvestigation.
+hardness across different model sizes, showcas-
+ing the efficient curation of high-quality training
+6 RelatedWork
+databysmallermodels. Furthermore,wepropose
+6.1 InstructionTuning an optimized version of the metric that offers in-
+creasedspeedwhilemaintainingequalefficacy. In
+Instructiontuningplayspivotalroleintrainingthe
+future, we aim to explore methods for automati-
+languagemodelstofollowinstructions(Sanhetal.,
+callytransformingeasytrainingsamplesintomore
+6https://github.com/gururise/AlpacaDataCleaned challengingones.
+
+8 Limitations
+Ourexaminationrevealsprevalenceofnoisysam-
+ples within the LP(1) and LP (1) subsets of
+app
+data. The detection and mitigation of noisy sam-
+ples are imperative to mitigate their influence on
+thedataset. Weleavethisforfuturework.
+9 EthicalConsiderations
+This paper proposes a data selection method for
+instruction-tuning. The paper aims to detect the
+difficult-to-learn samples and we don’t intend to
+introduce any biased selection. Based on our ex-
+periments, we manually inspected some filtered
+samplesandwedidn’tfindanyunderlyingpattern.
+Hence,wedonotanticipateanymajorethicalcon-
+cerns.
+10 Acknowledgments
+The authors thank Shang Data Lab, Palash
+Chauhan,AmulyaBangalore,ShreyasRajesh,Gau-
+tham Reddy, Sanjana Garg, Ethan Thai, Queso
+Tran,RahulMistry,SandyLa,andSophiaDofor
+theirvaluablecontributions.
+
+References Noland,KatherineMillican,GeorgevandenDriess-
+che,BogdanDamoc,AureliaGuy,SimonOsindero,
+Amro Abbas, Kushal Tirumala, Dániel Simig, Surya
+Karén Simonyan, Erich Elsen, Oriol Vinyals, Jack
+Ganguli,andAriSMorcos.2023. Semdedup: Data-
+Rae,andLaurentSifre.2022. Anempiricalanalysis
+efficientlearningatweb-scalethroughsemanticdedu-
+ofcompute-optimallargelanguagemodeltraining.
+plication. arXivpreprintarXiv:2303.09540.
+InAdvancesinNeuralInformationProcessingSys-
+tems,volume35,pages30016–30030.CurranAsso-
+DevanshArpit, StanisławJastrze˛bski, NicolasBallas,
+ciates,Inc.
+DavidKrueger,EmmanuelBengio,MaxinderSKan-
+wal,TeganMaharaj,AsjaFischer,AaronCourville,
+OrHonovich,ThomasScialom,OmerLevy,andTimo
+YoshuaBengio,etal.2017. Acloserlookatmemo-
+Schick. 2023. Unnatural instructions: Tuning lan-
+rizationindeepnetworks. InInternationalConfer-
+guage models with (almost) no human labor. In
+enceonMachineLearning,pages233–242.PMLR.
+Proceedings of the 61st Annual Meeting of the As-
+sociationforComputationalLinguistics(Volume1:
+Yihan Cao, Yanbin Kang, and Lichao Sun. 2023.
+LongPapers),pages14409–14428,Toronto,Canada.
+Instruction mining: High-quality instruction data
+AssociationforComputationalLinguistics.
+selection for large language models. ArXiv,
+abs/2307.06290.
+AranKomatsuzaki.2019. Oneepochisallyouneed.
+LichangChen,ShiyangLi,JunYan,HaiWang,Kalpa ArXiv,abs/1906.06669.
+Gunaratna, Vikas Yadav, Zheng Tang, Vijay Srini-
+vasan,TianyiZhou,HengHuang,andHongxiaJin. Andreas Kopf, Yannic Kilcher, Dimitri von Rutte,
+2024. Alpagasus: Training a better alpaca model Sotiris Anagnostidis, Zhi Rui Tam, Keith Stevens,
+withfewerdata. InTheTwelfthInternationalConfer- AbdullahBarhoum,NguyenMinhDuc,OliverStan-
+enceonLearningRepresentations. ley, Rich’ard Nagyfi, ES Shahul, Sameer Suri,
+DavidGlushkov,ArnavDantuluri,AndrewMaguire,
+Wei-Lin Chiang, Zhuohan Li, Zi Lin, Ying Sheng, ChristophSchuhmann,HuuNguyen,andAlexander
+ZhanghaoWu,HaoZhang,LianminZheng,Siyuan Mattick. 2023. Openassistant conversations - de-
+Zhuang,YonghaoZhuang,JosephE.Gonzalez,Ion mocratizinglargelanguagemodelalignment. ArXiv,
+Stoica, and Eric P. Xing. 2023. Vicuna: An open- abs/2304.07327.
+sourcechatbotimpressinggpt-4with90%*chatgpt
+quality. MingLi,YongZhang,ZhitaoLi,JiuhaiChen,Lichang
+Chen,NingCheng,JianzongWang,TianyiZhou,and
+HyungWonChung,LeHou,S.Longpre,BarretZoph, JingXiao.2023a. Fromquantitytoquality:Boosting
+Yi Tay, William Fedus, Eric Li, Xuezhi Wang, llmperformancewithself-guideddataselectionfor
+MostafaDehghani,SiddharthaBrahma,AlbertWeb- instructiontuning. ArXiv,abs/2308.12032.
+son, Shixiang Shane Gu, Zhuyun Dai, Mirac Suz-
+gun, Xinyun Chen, Aakanksha Chowdhery, Dasha
+XuechenLi,TianyiZhang,YannDubois,RohanTaori,
+Valter,SharanNarang,GauravMishra,AdamsWei
+IshaanGulrajani,CarlosGuestrin,PercyLiang,and
+Yu, Vincent Zhao, Yanping Huang, Andrew M.
+Tatsunori B. Hashimoto. 2023b. Alpacaeval: An
+Dai, Hongkun Yu, Slav Petrov, Ed Huai hsin Chi,
+automaticevaluatorofinstruction-followingmodels.
+Jeff Dean, Jacob Devlin, Adam Roberts, Denny
+https://github.com/tatsu-lab/alpaca_eval.
+Zhou, Quoc V. Le, and Jason Wei. 2022. Scal-
+ing instruction-finetuned language models. ArXiv,
+Dheeraj Mekala, Chengyu Dong, and Jingbo Shang.
+abs/2210.11416.
+2022a. LOPS:Learningorderinspiredpseudo-label
+selection for weakly supervised text classification.
+MikeConover,MattHayes,AnkitMathur,JianweiXie,
+In Findings of the Association for Computational
+Jun Wan, Sam Shah, Ali Ghodsi, Patrick Wendell,
+Linguistics: EMNLP2022,pages4894–4908,Abu
+MateiZaharia,andReynoldXin.2023. Freedolly:
+Dhabi,UnitedArabEmirates.AssociationforCom-
+Introducingtheworld’sfirsttrulyopeninstruction-
+putationalLinguistics.
+tunedllm.
+ChengyuDong,LiyuanLiu,andJingboShang.2021. Dheeraj Mekala and Jingbo Shang. 2020. Contextu-
+Dataqualitymattersforadversarialtraining: Anem- alized weak supervision for text classification. In
+piricalstudy. arXivpreprintarXiv:2102.07437. Proceedingsofthe58thAnnualMeetingoftheAssoci-
+ationforComputationalLinguistics,pages323–333,
+YonatanGeifman,GuyUziel,andRanEl-Yaniv.2019. Online.AssociationforComputationalLinguistics.
+Bias-reduceduncertaintyestimationfordeepneural
+classifiers. InInternationalConferenceonLearning DheerajMekala,TuVu,TimoSchick,andJingboShang.
+Representations. 2022b. Leveraging QA datasets to improve gen-
+erative data augmentation. In Proceedings of the
+Jordan Hoffmann, Sebastian Borgeaud, Arthur Men- 2022 Conference on Empirical Methods in Natu-
+sch, Elena Buchatskaya, Trevor Cai, Eliza Ruther- ral Language Processing, pages 9737–9750, Abu
+ford,DiegodeLasCasas,LisaAnneHendricks,Jo- Dhabi,UnitedArabEmirates.AssociationforCom-
+hannesWelbl,AidanClark,ThomasHennigan,Eric putationalLinguistics.
+
+Swaroop Mishra, Daniel Khashabi, Chitta Baral, and Kerkez,MadianKhabsa,IsabelM.Kloumann,A.V.
+Hannaneh Hajishirzi. 2021. Cross-task generaliza- Korenev,PunitSinghKoura,Marie-AnneLachaux,
+tionvianaturallanguagecrowdsourcinginstructions. ThibautLavril,JenyaLee,DianaLiskovich,Yinghai
+InAnnualMeetingoftheAssociationforComputa- Lu,YuningMao,XavierMartinet,TodorMihaylov,
+tionalLinguistics. PushkarMishra,IgorMolybog,YixinNie,Andrew
+Poulton,JeremyReizenstein,RashiRungta,Kalyan
+OpenAI.2023. Chatgpt. Saladi, Alan Schelten, Ruan Silva, Eric Michael
+Smith,R.Subramanian,XiaTan,BinhTang,Ross
+Victor Sanh, Albert Webson, Colin Raffel, Stephen
+Taylor, Adina Williams, Jian Xiang Kuan, Puxin
+Bach, Lintang Sutawika, Zaid Alyafeai, Antoine
+Xu,ZhengxuYan,IliyanZarov,YuchenZhang,An-
+Chaffin, Arnaud Stiegler, Arun Raja, Manan Dey,
+gelaFan,MelanieKambadur,SharanNarang,Aure-
+M Saiful Bari, Canwen Xu, Urmish Thakker,
+lienRodriguez,RobertStojnic,SergeyEdunov,and
+ShanyaSharmaSharma,ElizaSzczechla,Taewoon
+ThomasScialom.2023. Llama2: Openfoundation
+Kim, Gunjan Chhablani, Nihal Nayak, Debajyoti
+andfine-tunedchatmodels. ArXiv,abs/2307.09288.
+Datta,JonathanChang,MikeTian-JianJiang,Han
+Wang,MatteoManica,ShengShen,ZhengXinYong,
+YizhongWang,YeganehKordi,SwaroopMishra,Alisa
+HarshitPandey,RachelBawden,ThomasWang,Tr-
+Liu,NoahA.Smith,DanielKhashabi,andHannaneh
+ishala Neeraj, Jos Rozen, Abheesht Sharma, An-
+Hajishirzi.2022a. Self-instruct: Aligninglanguage
+dreaSantilli,ThibaultFevry,JasonAlanFries,Ryan
+modelswithself-generatedinstructions. InAnnual
+Teehan,TevenLeScao,StellaBiderman,LeoGao,
+Meeting of the Association for Computational Lin-
+ThomasWolf,andAlexanderMRush.2022. Multi-
+guistics.
+taskpromptedtrainingenableszero-shottaskgener-
+alization. InInternationalConferenceonLearning Yizhong Wang, Swaroop Mishra, Pegah Alipoor-
+Representations. molabashi, Yeganeh Kordi, Amirreza Mirzaei,
+Anjana Arunkumar, Arjun Ashok, Arut Selvan
+BenSorscher,RobertGeirhos,ShashankShekhar,Surya
+Dhanasekaran, Atharva Naik, David Stap, Eshaan
+Ganguli,andAriMorcos.2022. Beyondneuralscal-
+Pathak,GiannisKaramanolakis,HaizhiGaryLai,Is-
+inglaws: beatingpowerlawscalingviadatapruning.
+hanPurohit,IshaniMondal,JacobAnderson,Kirby
+AdvancesinNeuralInformationProcessingSystems,
+Kuznia,KrimaDoshi,MaitreyaPatel,KuntalKumar
+35:19523–19536.
+Pal, M.Moradshahi, MihirParmar, MiraliPurohit,
+NeerajVarshney,PhaniRohithaKaza,PulkitVerma,
+SwabhaSwayamdipta,RoySchwartz,NicholasLourie,
+RavsehajSinghPuri,RushangKaria,ShailajaKeyur
+YizhongWang,HannanehHajishirzi,NoahA.Smith,
+Sampat,SavanDoshi,SiddharthDeepakMishra,Su-
+andYejinChoi.2020. Datasetcartography:Mapping
+jan Reddy, Sumanta Patro, Tanay Dixit, Xudong
+anddiagnosingdatasetswithtrainingdynamics. In
+Shen, Chitta Baral, Yejin Choi, Noah A. Smith,
+Proceedings of the 2020 Conference on Empirical
+HannanehHajishirzi, andDanielKhashabi.2022b.
+MethodsinNaturalLanguageProcessing(EMNLP),
+Super-naturalinstructions: Generalizationviadeclar-
+pages9275–9293,Online.AssociationforComputa-
+ativeinstructionson1600+nlptasks. InConference
+tionalLinguistics.
+onEmpiricalMethodsinNaturalLanguageProcess-
+Rohan Taori, Ishaan Gulrajani, Tianyi Zhang, Yann ing.
+Dubois,XuechenLi,CarlosGuestrin,PercyLiang,
+andTatsunoriB.Hashimoto.2023. Stanfordalpaca: JasonWei,MaartenBosma,VincentZhao,KelvinGuu,
+An instruction-following llama model. https:// Adams Wei Yu, Brian Lester, Nan Du, Andrew M.
+github.com/tatsu-lab/stanford_alpaca. Dai,andQuocV.Le.2021. Finetunedlanguagemod-
+elsarezero-shotlearners. ArXiv,abs/2109.01652.
+Kushal Tirumala, Aram H. Markosyan, Luke Zettle-
+moyer,andArmenAghajanyan.2022. Memorization JasonWei,MaartenBosma,VincentZhao,KelvinGuu,
+withoutoverfitting: Analyzingthetrainingdynamics Adams Wei Yu, Brian Lester, Nan Du, Andrew M.
+of large language models. In Advances in Neural Dai,andQuocVLe.2022. Finetunedlanguagemod-
+InformationProcessingSystems. elsarezero-shotlearners. InInternationalConfer-
+enceonLearningRepresentations.
+Kushal Tirumala, Daniel Simig, Armen Aghajanyan,
+and Ari S. Morcos. 2023. D4: Improving llm pre- ChiyuanZhang,SamyBengio,MoritzHardt,Benjamin
+trainingviadocumentde-duplicationanddiversifica- Recht, and Oriol Vinyals. 2021. Understanding
+tion. ArXiv,abs/2308.12284. deeplearning(still)requiresrethinkinggeneraliza-
+tion. CommunicationsoftheACM,64(3):107–115.
+Hugo Touvron, Louis Martin, Kevin R. Stone, Peter
+Albert, Amjad Almahairi, Yasmine Babaei, Niko- Susan Zhang, Stephen Roller, Naman Goyal, Mikel
+lay Bashlykov, Soumya Batra, Prajjwal Bhargava, Artetxe, Moya Chen, Shuohui Chen, Christopher
+ShrutiBhosale,DanielM.Bikel,LukasBlecher,Cris- Dewan, Mona T. Diab, Xian Li, Xi Victoria Lin,
+tianCantónFerrer, MoyaChen, GuillemCucurull, TodorMihaylov,MyleOtt,SamShleifer,KurtShus-
+DavidEsiobu,JudeFernandes,JeremyFu,Wenyin ter, Daniel Simig, Punit Singh Koura, Anjali Srid-
+Fu, Brian Fuller, Cynthia Gao, Vedanuj Goswami, har, Tianlu Wang, and Luke Zettlemoyer. 2022.
+NamanGoyal, AnthonyS.Hartshorn, SagharHos- Opt: Open pre-trained transformer language mod-
+seini,RuiHou,HakanInan,MarcinKardas,Viktor els. ArXiv,abs/2205.01068.
+
+ChuntingZhou,PengfeiLiu,PuxinXu,SriniIyer,Jiao
+Sun,YuningMao,XuezheMa,AviaEfrat,PingYu,
+LILIYU,SusanZhang,GargiGhosh,MikeLewis,
+Luke Zettlemoyer, and Omer Levy. 2023. LIMA:
+Lessismoreforalignment. InThirty-seventhCon-
+ferenceonNeuralInformationProcessingSystems.
+
+A Appendix
+A.1 Winrateofdifferentsizesubsetsagainst
+fullAlpaca-Datadataset
+InFigure8,weillustratethewinratesofLlama-2
+7B and 13B models trained on subsets of vary-
+ingsizesfromtheAlpaca-datacorpus,contrasting
+them with the performance of models trained on
+the complete dataset. Remarkably, our analysis
+reveals that using subsets comprising as little as
+1% of the data is adequate to attain performance
+levelscomparabletothoseachievedwiththeentire
+dataset.
+58
+57
+56
+55
+54
+53
+1 3 5 10 25 33
+k%LowLP(1)
+etarniW
+56
+54
+52
+350M 1.3B 2.7B 6.7B 13B
+(Self-Ranking)
+LP(1)RankingSource
+7B
+13B
+Figure8: WeconsiderAlpaca-Data,varythepercent-
+ageofdataselected,andplotthewinrateofLlama-2
+models,trainedontheselecteddataincomparisonto
+modelstrainedonthecompletedataset.
+A.2 Dataselectionusingsmallermodelsfor
+largermodelonDollydataset
+We perform a comparative analysis utilizing var-
+ious smaller OPT models (350M, 1.3B, 2.7B) to
+rank the Dolly dataset based on their LP scores,
+subsequentlytrainingalargerOPT13Bmodelon
+theselecteddata. Theperformanceofthismodel
+iscontrastedwiththatofamodeltrainedondata
+selectedindependentlybyitself,asdepictedinFig-
+ure 9, revealing a consistent trend where perfor-
+mance improves with the increasing size of the
+smallermodel.
+AsimilaranalysisisappliedtotheAlpaca-Data
+corpus, utilizing OPT 350M, 1.3B, and 2.7B as
+smaller models, with OPT 6.7B serving as the
+largermodel. Theperformancecomparisonisillus-
+tratedinFigure5(c)Notably,weobserveapattern
+akintothatobservedinFigure5.
+etarniW
+10%Low 33%Low
+Figure9: Wevarythepercentageofselecteddatafrom
+theDollydatasettotraintheOPT13Bmodelandcon-
+ductacomparisonofthewinratesobtainedwhenthe
+dataisself-selectedbythe13Bmodelversusselectedby
+smallermodels. Thesmallermodelusedismentioned
+ontheX-axisandthewinrateisontheY-axis.
+A.3 HumanEvaluationInterface
+The human evaluation interface is shown in Fig-
+ure11.
+
+53
+52.5
+52
+51.5
+51
+350M 1.3B 2.7B 6.7B
+(Self-Ranking)
+LP(1)RankingSource
+etarniW
+10%Low 25%Low 33%Low
+Figure10:Wevarythepercentageofselecteddatafrom
+theAlpaca-DatadatasettotraintheOPT6.7Bmodel
+and conduct a comparison of the win rates obtained
+whenthedataisself-selectedbythe6.7Bmodelversus
+selected by smaller models. The smaller model used
+ismentionedontheX-axisandthewinrateisonthe
+Y-axis.
+Figure11:Webuiltasimplehumanevaluationinterface
+thatallowstheusertogenerateresponsesfromtwomod-
+elswithaninputpromptandchoosetheirpreference.
+
+Instruction Input Output Reason
+Create a fea- "Today marks a special mile- [1,0,0,0,0,0,0,0,1,0,0,0,0, Outputdoesn’t
+turevectorfor stoneforus." 0,1,0,0,0,0,0,1,0,0,0,0,0, makesense.
+the following 0,0,0,0,0,1,0,0,0,0,0]
+sentence:
+Calculate the sin(8)=-0.132351750097773 Computation
+valueofsin(8) isincorrect.
+Given a para- The year 2020 has been an in- Outputismiss-
+graph,summa- credibly difficult one for many ing.
+rize it in three people around the world. With
+sentences. an unprecedented global pan-
+demic upending daily life, peo-
+ple have had to adapt to a new
+normal. Businesses, schools,
+and even the way we interact
+withfamilyandfriendshaveall
+changed.
+Post a funny ![Image of funny cats Output con-
+meme about meme](https://i.imgflip.com/ tains a link
+cats. 1vyhr.jpg) which has
+nothing to
+do with the
+prompt.
+Multiply the (3+2i)*(2+4i) (3+2i)*(2+4i)=4+14i+8iˆ2 Computation
+following =4-6i. isincorrect.
+two complex
+numbers
+Categorize Acomputer,acar,ashoe,achair I would categorize the objects Instructionim-
+the following into two groups: man-made ob- pliesthateach
+objects into jects and natural objects. The group should
+two different computer, car, shoe, and chair have at least
+groups, and areallman-madeobjects,items oneitem.
+explain why thathavebeencreated,designed,
+you chose and assembled by people. On
+them. the other hand, a natural object
+wouldbesomethingthatisfound
+innatureandhasnohumaninter-
+vention.
+Table5: Wepresentthenoisysamplesfoundaswellasthereasonwefoundthemnoisy.

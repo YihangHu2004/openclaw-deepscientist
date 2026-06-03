@@ -1,0 +1,865 @@
+Muppet: Massive Multi-task Representations with Pre-Finetuning
+ArmenAghajanyan AnchitGupta AkshatShrivastava XilunChen
+Facebook Facebook Facebook Facebook
+armenag@fb.com anchit@fb.com akshats@fb.com xilun@fb.com
+LukeZettlemoyer SonalGupta
+Facebook Facebook
+lsz@fb.com sonalgupta@fb.com
+Abstract language tasks, we introduce a new intermediate
+stage, pre-finetuning. Pre-finetuning involves a
+Weproposepre-finetuning,anadditionallarge-
+massivemulti-tasklearningstep(4.8milliontotal
+scale learning stage between language model
+trainingexamples)performedonaround50classi-
+pre-training and fine-tuning. Pre-finetuning
+is massively multi-task learning (around 50 fication,summarization,questionanswering,and
+datasets, over 4.8 million total labeled ex- commonsensereasoningtasks. Webelieveweare
+amples), and is designed to encourage learn- the first to investigate multi-task learning at this
+ing of representations that generalize better scale in terms of both number and types of tasks.
+to many different tasks. We show that pre-
+Weshow,inparticular,thatstandardmulti-tasking
+finetuning consistently improves performance
+schemescanbeunstableandoftenfailtolearnhigh
+for pretrained discriminators (e.g. RoBERTa)
+qualityrepresentations. However,weintroducea
+andgenerationmodels(e.g.BART)onawide
+newtrainingschemewhichuseslossscalingand
+range of tasks (sentence prediction, common-
+sense reasoning, MRC, etc.), while also sig- task-heterogeneousbatchessothatgradientsteps
+nificantly improving sample efficiency during are more evenly balanced across multiple differ-
+fine-tuning. We also show that large-scale ent competing tasks, greatly improving training
+multi-tasking is crucial; pre-finetuning can
+stabilityandoverallperformance. Wecallourpre-
+hurt performance when few tasks are used up
+finetuned models MUPPET; Massive Multi-task
+until a critical point (usually above 15) after
+RePresentationwithPrE-fineTuning.
+which performance improves linearly in the
+Throughextensiveexperiments,weshowthatin-
+numberoftasks.
+corporatingpre-finetuningtoRoBERTa(Liuetal.,
+1 Introduction 2019b) and BART (Lewis et al., 2019) models
+yields consistent improvements, including new
+Therecentsuccessoflanguagemodelpre-training
+state-of-the-art performance for RTE (Bentivogli
+(Devlinetal.,2018;Liuetal.,2019b;Lewisetal.,
+etal.,2009)andHellaSWAG(Zellersetal.,2019),
+2019; Raffel et al., 2019; Radford et al., 2019)
+without having to specify specific intermediate
+is remarkable, at least in part, due to the exclu-
+transfertasks. Thesegainsareparticularlystrong
+sive use of self supervision, without any manu-
+inthelowresourceregime,wherethereisrelatively
+ally labeled data. For many tasks, however, we
+little labeled data for fine-tuning. We also study
+already have training examples for related prob-
+why pre-finetuning outperforms previous multi-
+lems,whichweshouldbeabletoleverage. Recent
+tasking schemes. We first compare different op-
+work has shown gains from fine-tuning schemes
+timizationtechniquestostabilizetraining,andfind
+that are multi-task (Raffel et al., 2019; Khashabi
+itimportanttousetask-heterogeneousbatcheswith
+et al., 2020) and multi-stage (Liu et al., 2019a),
+task-rebalancing loss scaling. We also show that
+butitcanbedifficulttoknowwhichintermediate
+scale is crucial for effective multi-task learning.
+taskswillbesttransfer(Raffeletal.,2019). Inthis
+Weempiricallyseeacriticalpointintermsofthe
+paper,weshowthatmulti-tasksupervisedtuning,
+number of tasks (usually over 15); having fewer
+ifdoneatasufficientlylargescalewithmanydif-
+tasksdegradesrepresentations,whilehavingmore
+ferent tasks, can be an effective second stage of
+seemstoimproveperformancelinearlyasfaraswe
+task-agnostic pre-training, removing the need to
+wereabletoscale.
+pre-selectthebestintermediatetasks.
+Tosummarize,ourcontributionsinclude:
+More specifically, in addition to the standard
+pre-training/fine-tuning methodology of learning • We show that we can further improve pre-
+5799
+Proceedingsofthe2021ConferenceonEmpiricalMethodsinNaturalLanguageProcessing,pages5799–5811
+November7–11,2021.(cid:13)c2021AssociationforComputationalLinguistics
+
+trained representations with an additional TaskType #Datasets #Train #Eval
+stage we call pre-finetuning, which utilizes
+Classification 26 2.9M 188K
+massivelymulti-tasklearning. Weshowstan- Summarization 4 524K 30K
+MRC 6 1.05M 123M
+dardpre-trainedrepresentations,whenfurther
+CommonSense 10 360K 49K
+refined with pre-finetuning consistently im-
+Total 46 4.8M 390K
+proveperformanceondownstreamtasks.
+Table 1: Break down of MTL pre-finetuning datasets.
+• We introduce a new multi-task training
+The table shows the number of datasets we used per
+schemeforeffectivelearningatscale,which
+task type and the number of samples in training and
+uses loss scaling and task-heterogeneous
+evaluationsets.
+batches.
+• Weexploretheeffectsofscaleonmulti-task
+domains. ContrarytoT5,weshowthatincorporat-
+learning and show the existence of critical
+ingasecondarystageofmulti-tasklearningdoes
+points in multi-task training, beyond which
+lead to better representations. In §5 we demon-
+increasingthenumberoftasksimprovesgen-
+stratetheeffectivenessofmulti-tasklearningtobe
+eralizablerepresentations.
+comingfromthelargescaleofourMTLsetup.
+• Weconductastudysurroundingthedataeffi-
+3 Pre-FinetuningThroughMassive
+ciencyofstandardpre-trainedrepresentations
+MultitaskLearning
+and their respective pre-finetuned counter-
+parts. Weshowthatthepre-finetunedmodels
+Previousworkhasreportedmixedresultsfromex-
+consistentlyrequirelessdataforfine-tuning.
+perimentsonmulti-tasklearning(Liuetal.,2019a;
+2 RelatedWork Raffeletal.,2019). Ingeneral,itcanbechalleng-
+ingtobalancethelossesfromdifferenttasks;up-
+Multi-task learning has been an increasingly ac- samplingcanleadtooverfittinglowresourcetasks,
+tive topic in recent literature. Recent advances anddownsamplingcanleadtoimproperlearning
+such as MT-DNN show that by leveraging multi- ofspecifictasks. Thisdifficultyisparticularlypro-
+tasklearning,wecanfurtherimproveperformance nouncedwhenoperatingatthescaleofexperiments
+on several language benchmarks on top of tradi- we show in Section 5.1, where there are more di-
+tional pre-training (Liu et al., 2019a). However, verse tasks than previously considered. This sec-
+T5 (Raffel et al., 2019) shows that incorporating tionpresentsourpre-finetuningapproachthatleads
+multi-task learning ontop of larger models does tomorestableandaccuratemulti-tasktrainingby
+not improve upon the standardized pre-training / introducing new optimization, loss scaling, and
+finetuning. Thustheeffectofmulti-tasklearning tasksamplingschemestobalanceeachminibatch’s
+across different pre-training methods is not fully updatesbetter.
+understood.
+Recently Khashabi et al. (2020) showed how
+3.1 TasksandLosses
+doingMTLtrainingonarangeofQAtaskscanim-
+provetheperformanceofT5bytakingadvantage DiverseTasks Tolearngenerallanguagerepre-
+ofcrossdatasettransfer. Unlikeourapproach,they sentations, we include a variety of tasks across
+convert all the data to a seq2seq format, operate many domains. We select language tasks across
+on a smaller MTL scale, have a different batch- four different domains: classification, common-
+ing strategy, and focus solely on improving QA sensereasoning,machinereadingcomprehension,
+tasks. Ourworkshowshowevenseeminglyvery andsummarization. InTable1,weshowthebreak
+differentdatasets,forexample,summarizationand down of each of the task types along with the
+extractiveQA,canhelpeachotherbyimproving number of samples used from each during pre-
+themodel’srepresentations. finetuning. In total our multi-task set up learns
+Our work aims to explore multi-task learning over 4.8 supervised samples across 4 families of
+at a much larger scale; by incorporating a larger tasks.
+numberoftasks,weshowthatwecanconsistently Afulllistofallofthedatasetsweleveragefor
+improveseverallanguagebenchmarksfromseveral pre-finetuningisdescribedinappendix§A.1.
+5800
+
+TaskType LossFunction In particular, R3F/R4F consists of an additional
+lossterm,ensuringthatsmallperturbationstothe
+Classification CrossEntropy(CE)
+Summarization LabelSmoothedCE(Szegedyetal.,2015) inputspaceresultinsimilarrepresentations,which
+MRC SpanPrediction(Seoetal.,2016)
+can be used to learn more robust representations
+Commonsense SentenceRankingLoss(Liuetal.,2019b)
+duringpre-finetuning.
+Table 2: Description of loss functions for each task Inearlyexperimentation,wefoundthatR3Fwas
+type. Noteforsummarizationthelabelsmoothedcross pivotalingettingMUPPETtoworkforBART.All
+entropylossisaveragedacrosstokens. otherfine-tuningandpre-finetuningwasdoneusing
+standardSGD.
+Standard Losses To train on several datasets, 3.3 LossScaling
+ourmodelcontainstask-specificheads,eachopti-
+Loss scaling methods introduce a multiplicative
+mizingforatask-specificloss. Thelossfunctions
+reweightingofindividuallossesperdata-point. Var-
+aresummarizedintable2. Eachlossisscaledwith
+ious loss scaling techniques have been proposed,
+lossscalingdescribedin§3.3. Afterlossscaling,
+from dynamic scaling by inverse training loss to
+the gradients from each task are averaged before
+simplescalingbythenumberofdata-pointsinre-
+doingthemodelupdatestep.
+spectivedatasets(Chenetal.,2018).
+As pre-finetuning optimizes several different
+3.2 Optimization
+types of tasks and datasets, each having its own
+We show two strategies to learn multi-task repre-
+output spaces, loss scaling becomes essential to
+sentationsatscale: AccumulatingGradientsAcross
+ensurestabletraining. Weattemptedvariousforms
+Tasks(HeterogeneousBatches)andLeveragingBet-
+ofloss-scalingthroughoutinitialexperimentation,
+terFinetuning.
+but the most effective was the novel method we
+describebelow.
+Accumulating Gradients Across Tasks Our
+Let us denote L (x ,y ;θ) as the loss for data-
+model is trying to optimize not a single objec- i i i
+pointiforamodelparameterizedbyθ. Remember
+tive but several potentially competing objectives
+thatthelossdependsonthetypeoftask(common-
+to create a unified representation across several
+sense loss is different from binary classification).
+tasks during model training. During gradient de-
+Furthermoreletn : N → Nbeafunctionwhichfor
+scent, moving along the gradient of a single task
+eachdata-pointreturnsthenumberofpredictions
+maynotbetheoptimaldirectionforthemodelto
+Loperatesover. Forexample, forbinaryclassifi-
+movetolearnasingleunifiedrepresentationacross
+cation, n would return two, while for generation,
+tasks. Toovercomethis,weensureeachbatchour
+n would return the size of the vocabulary (since
+model optimizes consists of several tasks. Each
+we average across loss per token generated). We
+worker samples a random batch from our set of
+scaledata-pointlosssothat,iftheclassdistribution
+tasks and computes a gradient, accumulated for
+wereuniformlydistributedalongwithourmodels
+thefinalupdate. Empiricallyweuse64GPUsfor
+predictions,allofourlosseswouldhaveequivalent
+pre-finetuning,resultingineachbatchconsistingof
+values.
+gradientsacross64sampledtasks. In§5.2weshow
+howsuchastrategyallowsforourmodeltoarrive L (x ,y ;θ)
+Lscaled(x ,y ;θ) = i i i (1)
+atabetterrepresentationforendtaskfinetuning. i i i logn(i)
+Better Finetuning Instead of starting from Wefoundthatthisstaticscalingworkedincredi-
+scratch, we initialize our model with representa- blywell,outperformingotherlossscalingmethods
+tionslearnedfromself-supervisedpre-trainingin inearlyexperimentation.
+pre-finetuning. Thiscaninherittheknowledgecap-
+3.4 Sampling
+turedinthepre-trainedrepresentationsandspeed
+uptraining. Mosbachetal.(2020)showthatstan- Another approach to balancing various tasks in a
+dardfine-tuningofpre-trainedmodelscanbeun- multi-tasksetupistoup-samplesmallerdatasets
+stable, which may be aggravated in our case as anddown-samplelargeronestoachievemoreuni-
+wearetrainingonadiversesetoftaskssimultane- formitybetweendatasetsizes.
+ously. Therefore, we employ the R3F/R4F meth- Existingresultsfordatasetsamplingmethodsin
+ods(Aghajanyanetal.,2020)tocombatthisissue. multi-tasklearningareconflicting,butrecentwork
+5801
+
+has shown that it does not work well for multi- et al., 2020),1 and RoBERTa (Liu et al., 2019b)
+task learning of pre-trained representations. For models. For Summarization tasks we show that
+example,T5showedthatallvariousformsofsam- our pre-finetuned BART model outperforms all
+plingdidnotimproveoverusingthenaturalsizeof other summarization baselines. Both of these ta-
+datasets(Raffeletal.,2019). blesreportoverdata-setsavailableduringthepre-
+Wealsofoundthatsamplingdatasetswerecon- finetuningstage.
+sistently detrimental for multi-task learning over Given that our pre-finetuned models now have
+pre-trained representations during initial experi- an understanding of the task at hand through the
+mentation. Specifically, we saw unmanageable useofclassificationheads,wehaveachoiceduring
+over-fitting and stability issues. Therefore we finetuningonwhetherornottousetheseheads. In
+optformaintainingthenaturaldistributionofthe general we found re-using heads to be beneficial
+datasetsthroughoutallofourexperiments. forMRC,CommonsenseandSentencePrediction
+taskswithsmalldatasetsize.
+3.5 ExperimentalSetup
+Across the board, pre-trained representations
+We selected RoBERTa (Liu et al., 2019b) and thatwerefurtherrefinedwithpre-finetuningoutper-
+BART(Lewisetal.,2019)asourinitialpre-trained formed standard pre-trained representations. We
+modelstofurtherpre-finetune. Foreachtasktype see more modest gains on larger datasets, most
+we use a different prediction scheme. Every Sen- likelybecausewedonotneedtorefinerepresenta-
+tencePredictiondatasetgetsaseparateclassifica- tionsbeforehandifthefine-tuningdatasetislarge.
+tionhead,forCommonsenseandMRCweutilize Onsmallerdatasets,weseesubstantialgains. For
+aseparateunifiedheadforeachtask. ForSumma- example,thepre-finetunedRoBERTa-BASEmodel
+rization,wedonotaddanyparametersandusethe onRTEimprovesbycloseto9points,rivalingthe
+BARTdecoderandoutputlayerasis. Experimen- RoBERTa-Largeaccuracy,whilethepre-finetuned
+tallywesawusingadifferentheadperindividual RoBERTa-Largemodelgetsnewstate-of-the-arton
+Commonsense and MRC datasets lead to severe RTErivalingmodelsanorderofmagnitudelarger
+overfitting. thanit.
+Forbothmodels,wedothepre-finetuningpro- Wedonotimprovejustoversentenceprediction
+cedure for both the Base and Large models. We tasks but on every set of tasks that we measured.
+trained each model configuration with 64 GPUs Forexample,wereachanewstateoftheartonthe
+until convergence. Dependent on configuration, HellaSwagdatasetpreviouslyachievedbyutilizing
+thisrangedfromadayto4days. Weincludethe a new fine-tuning approach. Our methods do not
+hyper-parametersusedperpre-finetuningruninthe increaseparametercountoranycomplexitymea-
+AppendixinSection§A.2. sures but are quite successful at refining features
+andpreparingthemfordownstreamfine-tuning.
+4 EmpiricalResults
+4.1 FinetuningOutsideofPre-Finetuning
+Wefirstshowthatpre-finetuningimprovestherep-
+Domain
+resentationsofpre-trainingmodels. Todoso,we
+fine-tuneourpre-finetunedmodelsonalargesetof We also report the performance on tasks not in-
+tasks. cluded in the pre-finetuning data. To do so, we
+For each of the individual downstream tasks, finetune our models on a set of tasks including
+weuseafixedhyper-parametersearchtooptimize (1) ANLI (Nie et al., 2019) and Hyperpartisan
+oversimplehyperparameterssuchaslearningrate, (Kieseletal.,2019)forclassification,(2)Arxiv(He
+Adam(cid:15)(KingmaandBa,2014)anddropout(Sri- etal.,2019),PubMed(Cohanetal.,2018),(Sharma
+vastavaetal.,2014). Wepresentourresultsintwo etal.,2019)forsummarization,and(3)Chunking,
+tables. Table 3 shows our results on the GLUE ConstituencyParsingandPart-Of-Speechtagging
+benchmark (Wang et al., 2018) as well as two forstructuredpredictionfromthePennTreebank
+MRCtasks;SQuAD(Rajpurkaretal.,2016a)and dataset (Marcus et al., 1993). We present these
+ReCoRD(Zhangetal.,2018). Table4reportsre- resultsinTable5andTable6.
+sultsonotherSentencePredictiontasksaswellas
+1For ELECTRA results we leverage the results pre-
+Commonsensetasks. Wealsoincluderesultsfrom
+sentedintheELECTRAgithubhttps://github.com/
+MT-DNN (Liu et al., 2019a), ELECTRA (Clark google-research/electra#expected-results
+5802
+
+GLUE MRC
+MNLI QQP RTE QNLI MRPC SST-2 SQuAD
+RoBERTa-B 87.6 91.9 78.7 92.8 90.2 94.8 82.6
++MUPPET 88.1 91.9 87.8 93.3 91.7 96.7 86.6
+RoBERTa-L 90.2 92.2 88.1 94.7 90.9 96.4 88.7
++MUPPET 90.8 92.2 92.8 94.9 91.4 97.4 89.4
+BART 89.9 92.5 87.0 94.9 90.4 96.6
++MUPPET 89.9 92.7 92.4 94.6 92.2 96.9
+ELECTRA-B 88.8 91.5 82.7 93.2 89.5 95 80.5
+ELECTRA-L 90.9 92.4 88.0 95.0 90.8 96.9 88.1
+MT-DNN 87.1 91.9/89.2 83.4 92.9 91.0/87.5 94.3 -
+Table3:WepresentresultsfortheGLUEbenchmarktaskandaMRCdataset.BoldednumbersshowtheMUPPET
+vs. basemodel,underlinemarksthebestnumber. Ifnotexplicitlystated,theresultsareshowingtheaccuracyof
+theevaluationset. FortheMRCtasks,wereportbothexactmatch(EM)andF1asisstandardintheliterature. For
+SQuAD,wereusedthetaskheadfrompre-finetuning.
+SP Commonsense Summarization
+BoolQ CQA HellaSwag OpenQA CNN/DailyMail Gigaword RedditTIFU
+RoBERTa-B 82.0 66.2 65.1 63.8 - - -
++MUPPET 83.8 69.4 69.0 64.6 - - -
+RoBERTa-L 86.4 78.1 83.4 73.6 - - -
++MUPPET 87.5 79.2 86.4 74.4 - - -
+BART 86.2 78.1 84.1 71.4 44.16/21.28/40.90 39.29/20.09/35.65 24.19/8.12/21.31
++MUPPET 86.9 74.8 75.9 70.8 44.45/21.25/41.4 40.40/20.54/36.21 30.30/11.25/24.92
+T5-L 86.2 75.6 83.9 70.4 42.50/20.68/39.75 - -
+T5-11B 86.8 78.9 85.8 75.4 43.52/21.55/40.69 - -
+PEGASUS - - - - 44.17/21.47/41.11 39.12/19.86/36.24 26.63/9.01/21.60
+ERNIE-GEN - - - - 44.02/21.17/41.26 39.25/20.25/36.53 -
+ProphetNet - - - - 44.20/21.17/41.30 39.51/20.42/36.69 -
+Table4:Wepresentresultsforthenon-GLUESentencePredictiontasksaswellasasetofstandardCommonsense
+tasks. Bolded numbers signify MUPPET vs. base model, while an underline signifies the best number. If not
+explicitlystated,theresultsareshowingtheaccuracyoftheevaluationset. Forcommonsensetasks,were-usethe
+taskheadfrompre-finetuning.
+WeseethattheMUPPETvariantsofourmodels empiricallyexploringtheeffectsofscalingupthe
+out-performthebaselinesconsistentlyacrosstask numberofdatasetstotherepresentationslearned
+type and dataset. As a special case we do an in duringMTL.
+depthanalysisoftheMUPPETvariantofRoBERTa
+Wepre-finetuneacollectionofRoBERTa-Base
+onthenotoriouslytoughANLIdatasetandseethe
+models with varying numbers of datasets. We
+same pattern. Pre-finetuned models consistently
+trainsevenmodels,sixuniformlychosenbetween
+outperformtheirbasecounterparts.
+10 and 40, ensuring that at each point, the se-
+lecteddatasetsareasupersetofthedatasetsfrom
+5 UnderstandingMulti-TaskatScale
+priorpoints. Thelastmodelisfullytrainedonall
+5.1 ImportanceofScale datasets. Concretelygiventwomodelstrainedwith
+adifferentnumberofdatasetsa,b : a > b,model
+Thefirstaxiswewouldliketoexploreisthescale
+awillcontainalldatasetsusedtotrainmodelband
+on which multi-task learning is done. Previous
+more.
+work, such as T5 and MT-DNN, focused on the
+MTLscaleofaroundadozendatasets. Tothebest Foreachversionofthemodel,wefine-tunefive
+ofourknowledge,ourpaperhasthelargestMTL datasets and plot the results in Figure 1. Specifi-
+set up to date. Accordingly, we are interested in callywefinetuneSTS-B(Ceretal.,2017),BoolQ
+5803
+
+SP StructuredPrediction(Penn) Summarization
+Hyperpartisan Chunking Parsing POS Arxiv PubMed BigPatent
+RoBERTa-B 84.2 93.4 95.1 93.7 - - -
++MUPPET 85.8 95.5 94.5 93.2 - - -
+RoBERTa-L 90.4 95.1 94.5 93.4 - - -
++MUPPET 92.5 96.9 95.7 97.9 - - -
+BART 85.1 92.1 91.1 91.8 41.20/9.20/32.45 39.87/16.43/35.56 48.54/29.35/39.42
++MUPPET 87.2 96.1 94.5 97.2 43.90/14.50/40.10 45.13/19.80/39.90 52.34/33.50/42.80
+Pegasus - - - - 43.85/16.83/39.17 44.53/19.30/40.70 52.25/33.04/41.80
+Table5:Wepresentresultsonalargesetofdifferenttasksacrossdatasetsthatarenotavailabletothemodelduring
+thepre-finetuningstage. BoldednumberssignifyMUPPETvs. basemodel,whileanunderlinesignifiesthebest
+number. ForChunking/Parsing,weuseF1,whileforPart-Of-Speechtagging,weuseaccuracy.
+Model TrainingData A1 A2 A3 ANLI
+RoBERTa S,M 47.6 25.4 22.1 31.1
++F 54.0 24.2 22.4 32.8
++F+A1(cid:63)2 68.7 19.3 22.0 35.8
++F+A1+A2(cid:63)3 71.2 44.3 20.4 43.7
+S,M,F,ANLI 73.8 48.9 44.4 53.7
+RoBERTa-MUPPET S,M 49.9 28.2 24.2 33.3
++F 55.2 26.8 24.6 33.9
++F+A1(cid:63)2 70.9 22.5 25.1 36.7
++F+A1+A2(cid:63)3 74.3 48.2 22.8 45.9
+S,M,F,ANLI 76.9 52.3 44.2 56.9
+InfoBERT(Wangetal.,2021) S,M,F,ANLI 76.4 51.6 48.6 58.3
+ALUM(Liuetal.,2020) S,M,F,ANLI 73.3 53.4 48.2 57.7
+XL-NET(Yangetal.,2019) S,M,F,ANLI 67.6 50.7 48.3 55.1
+Table6: WeshowtheperformanceoftheRoBERTamodelandthepre-finetunedRoBERTa-MUPPETmodelon
+theANLIbenchmark.BoldednumberssignifyMUPPETvsbasemodel,underlinesignifiesbestnumber.‘S’refers
+to SNLI,‘M’to MNLI dev(-m=matched, -mm=mismatched), and‘F’to FEVER;‘A1–A3’refertotherounds
+respectivelyand‘ANLI’referstoA1+A2+A3.
+(Clark et al., 2019), RACE (Lai et al., 2017), thoughdependentonthedataset,thiscriticalpoint
+SQuAD (Lai et al., 2017), and MNLI (Williams isroughlybetween10and25tasks.
+et al., 2018a). We include these five datasets in ThissuggeststhatpreviouslyobservedMTLlim-
+thefirstMTLrun(10datasets)toremoveanybias itationswerenotfundamentalandcaninsteadbe
+fromaddingtheminalaterstage. attributedtothelackofsufficientscale.
+We see a couple of interesting patterns. First,
+5.2 ImportanceofHeterogenousBatches
+forindividualtaskssuchasRTE(Bentivoglietal.,
+2009), increasing the pre-finetuning scale mono- AnothercriticalfactortogettingMTLtolearngen-
+tonically improves performance. This is aligned eralizable representations is the method through
+withotherpapersthathaveseenbenefitsfromfirst which MTL is implemented, specifically the se-
+training on MNLI (Williams et al., 2018a) and lection of batches. To better quantify this trend,
+then fine-tuning on RTE (Liu et al., 2019b). For we experimented with three balancing schemes:
+otherdatasets,weseethatdoingMTLinthe< 15 datasethomogenous,batchhomogenousandbatch
+datasets regime is detrimental for end-task fine- heterogenous.
+tuning. This is also aligned with other empirical We refer to dataset homogenous as selecting
+observations,i.e.,T5reportedthatdoingMTLdid batches from datasets sequentially. So we first
+not improve over only fine-tuning. Nevertheless, train on dataset A, then train on dataset B, etc.
+it seems that as we increase the number of tasks On the other hand, batch homogenous refers to
+pastsomecriticalpoint,ourpre-trainedrepresenta- selecting batches containing only data from the
+tionsbecomemoregeneralizable. Furthermore,al- same task; therefore, all gradients are from the
+5804
+
+88
+86
+84
+82
+80
+78
+0 10 20 30 40
+# of Datasets
+5805
+ccA
+RoBERTa Pre-Finetuning Scale Ablation
+Dataset
+RTE
+BoolQ
+RACE
+SQuAD
+MNLI
+Figure 1: We plot the RoBERTa evaluation accuracy of five datasets: RTE, BoolQ, RACE, SQuAD, and MNLI,
+across various scales of multi-task learning measured in the number of datasets. We notice that performance
+initiallydegradesuntilacriticalpointisreachedregardingthenumberofthedatasetsusedbytheMTLframework
+forallbutonedataset. Postthiscriticalpoint;ourrepresentationsimproveovertheoriginalRoBERTamodel.
+samedataset. Thisisimplementedbyselectingall everypre-finetuningcheckpointfromSection§5.1.
+datasets,batchingonadatasetlevel,andselecting Weplottheheatmapsgeneratedfromtheserunsin
+thosesamebatchesrandomlyduringtraining. Fi- Figure3.
+nally,batchheterogeneousreferstoasingleupdate Multiplepatternsemerge. First,weseeaclear
+containingabatchfrommultipledifferentdatasets visualizationofthecriticalpointmentionedwhen
+spanningdifferenttasks. Weimplementedthisby doingpre-finetuning. Asweincreasethescaleof
+firstcreatinghomogenoussub-batches,calculating MTL,betterrepresentationsareavailablefordown-
+losspersub-batchperGPU,andthenaggregating stream finetuning. Furthermore, we see that pre-
+acrossGPUsmanifestinginagradientupdatethat finetunedmodelsatalargerscalearemuchmore
+containsvariousdatasetsand,therefore,tasks. data-efficientthanstandardpre-trainedmodels.
+To dissect the importance of heterogeneous Specificallylookingatthe34/40pre-finetuning
+batches, we train a RoBERTa-Base model on 35 scale on Figure 3 we see that we reach higher
+randomlyselectedtasksusingthethreedataselec- evaluation accuracies much sooner than the base
+tionmethodologiesoutlinedabove. Wethenfine- RoBERTamodel(row0).
+tunethesethreemodelsonthesamefivedata-sets
+6 Conclusion
+mentionedintheprevioussection.
+We present our results in Figure 2. We see the
+In this work, we propose pre-finetuning, a stage
+importance of properly defining a batching strat-
+afterpre-trainingtofurtherrefinerepresentations
+egyforeffectivemulti-tasklearning. Ourfindings
+beforeend-taskfinetuning. Weshowthatwecanef-
+arealsoconsistentwith(Aghajanyanetal.,2020)
+fectivelylearnmorerobustrepresentationsthrough
+whichsawthatsequentialtrainingofdata-setsde-
+multi-tasklearning(MTL)atscale. OurMTLmod-
+gradesgeneralizablerepresentations.
+els outperform their vanilla pre-trained counter-
+partsacrossseveraltasks. Ouranalysisshowsthat
+5.3 LowResourceExperiments
+properlyscalingMTLwithheterogeneousbatches
+WenoticedinSection§4thatdata-setswithsmaller andlossscalingiscriticaltoleveragingbetterrepre-
+data-setsizestendedtoimprovemorefromMTL sentations. Wealsoshowacriticalpointregarding
+training. To strengthen this hypothesis, we look thenumberoftaskswhendoingmulti-tasklearning,
+attwofactors: thescaleofpre-finetuningandthe where fewer tasks degrade representations com-
+scaleoffine-tuning(sizeoffine-tuningdata-set). paredtothepre-trainedmodel,butmoretasksthan
+We select three data-sets that were not used in thispointimproverepresentations.
+pre-finetuninginSection§5.1. Wealsoselectnine We discussed a practical setting in which do-
+partitions per fine-tuning data-set, which is sam- ing this massive multi-task learning is stable and
+pled uniformly between 10% of the data-set and effective through simple loss scaling and hetero-
+100% of the data-set. Selecting the low-resource geneous batches. With our method, we improve
+splitswasdonethroughrandomsampling. uponpriorstateoftheartmethodsforRTE(Ben-
+Wethenfine-tuneeverylow-resourcesplitwith tivoglietal.,2009)andHellaSWAG(Zellersetal.,
+
+90
+85
+80
+75
+70
+65
+RTE BoolQ RACE SQuAD MNLI
+Dataset
+5806
+ycaruccA
+noitaulavE
+RoBERTa Base MTL Batching Strategy Ablation
+Batch Strategy
+Dataset Homogenous
+Batch Homogenous
+Batch Heterogenous
+Figure 2: We plot the evaluation accuracy of RoBERTa across five datasets: RTE, BoolQ, RACE, SQuAD, and
+MNLI, using our three batching strategies for multi-task: Dataset Homogeneous, Batch Homogeneous, Batch
+Heterogeneous.Theuseofheterogenousbatchesoutperformsotherbatchingstrategiesbyasignificantmarginand
+highlightstheimportanceofimplementingMTLwiththecorrectbatchingstrategy.
+10% 20% 30% 40% 50% 60% 70% 90% 100%
+Low Resource Scale
+elacS
+gninutenif-erP
+0
+01
+61
+22
+82
+43
+04
+Pre-Finetuning and Low-Resource Scale Ablation: QNLI
+0.95
+0.90
+0.85
+0.80
+0.75
+ycaruccA
+noitaulavE
+10% 20% 30% 40% 50% 60% 70% 90% 100%
+Low Resource Scale
+elacS
+gninutenif-erP
+0
+01
+61
+22
+82
+43
+04
+Pre-Finetuning and Low-Resource Scale Ablation: CoLA
+0.88
+0.86
+0.84
+0.82
+0.80
+0.78
+0.76
+0.74
+0.72
+ycaruccA
+noitaulavE
+Figure 3: We fine-tune every low-resource split with every pre-finetuning checkpoint from Section §5.1 for two
+datasets not available in any of the pre-finetuning MTL datasets; QNLI (Rajpurkar et al., 2016b) and CoLA
+(Warstadtetal.,2018). Thepre-finetuningscaleisreportedintermsofthenumberofdatasets.
+2019),aswellasimproveuponvanillapre-trained Giampiccolo.2009. Thefifthpascalrecognizingtex-
+representationsforMNLI(Williamsetal.,2018a), tualentailmentchallenge. InTAC.
+SQuAD (Rajpurkar et al., 2016a), BoolQ (Clark SamuelBowman,GaborAngeli,ChristopherPotts,and
+etal.,2019),andCommonSenseQA(Talmoretal., ChristopherManning.2015. Alargeannotatedcor-
+2018). WealsoourMTLmodelperformancewith pusforlearningnaturallanguageinference. InPro-
+ceedingsofthe2015ConferenceonEmpiricalMeth-
+lowresourceexperiments. Weshowthatonheld-
+odsinNaturalLanguageProcessing(EMNLP).As-
+out datasets, leveraging representations from our
+sociationforComputationalLinguistics.
+pre-finetuned models with 34-40 tasks, we reach
+Daniel Cer, Mona Diab, Eneko Agirre, Inigo Lopez-
+higherevaluationaccuracieswithmuchlessdata
+Gazpio, and Lucia Specia. 2017. Semeval-2017
+thantheRoBERTamodel. task1: Semantictextualsimilarity-multilingualand
+cross-lingual focused evaluation. arXiv preprint
+arXiv:1708.00055.
+References
+Zhao Chen, Vijay Badrinarayanan, Chen-Yu Lee, and
+Andrew Rabinovich. 2018. Gradnorm: Gradient
+ArmenAghajanyan,AkshatShrivastava,AnchitGupta,
+normalization for adaptive loss balancing in deep
+Naman Goyal, Luke Zettlemoyer, and Sonal Gupta.
+multitasknetworks. InInternationalConferenceon
+2020. Better fine-tuning by reducing representa-
+MachineLearning,pages794–803.PMLR.
+tionalcollapse. arXivpreprintarXiv:2008.03156.
+Christopher Clark, Kenton Lee, Ming-Wei Chang,
+Aida Amini, Saadia Gabriel, Peter Lin, Rik Koncel-
+Tom Kwiatkowski, Michael Collins, and Kristina
+Kedziorski, Yejin Choi, and Hannaneh Hajishirzi.
+Toutanova. 2019. BoolQ: Exploring the surprising
+2019. Mathqa: Towards interpretable math word
+difficulty of natural yes/no questions. In Proceed-
+problem solving with operation-based formalisms.
+ingsofNAACL-HLT2019.
+arXivpreprintarXiv:1905.13319.
+Kevin Clark, Minh-Thang Luong, Quoc V Le, and
+Luisa Bentivogli, Peter Clark, Ido Dagan, and Danilo ChristopherDManning.2020. Electra: Pre-training
+
+text encoders as discriminators rather than genera- Eduard Hovy, Ulf Hermjakob, Chin-Yew Lin, et al.
+tors. arXivpreprintarXiv:2003.10555. 2001. The use of external knowledge in factoid qa.
+InTREC,volume2001,pages644–52.
+PeterClark,IsaacCowhey,OrenEtzioni,TusharKhot,
+Ashish Sabharwal, Carissa Schoenick, and Oyvind LifuHuang,RonanLeBras,ChandraBhagavatula,and
+Tafjord. 2018. Think you have solved question an- Yejin Choi. 2019. Cosmos qa: Machine reading
+swering? tryarc,theai2reasoningchallenge. arXiv comprehension with contextual commonsense rea-
+preprintarXiv:1803.05457. soning. arXivpreprintarXiv:1909.00277.
+Shankar Iyer, Nikhil Dandekar, and Kornel Csernai.
+Arman Cohan, Franck Dernoncourt, Doo Soon Kim,
+2017. Firstquoradatasetrelease: Questionpairs.
+Trung Bui, Seokhwan Kim, Walter Chang, and Na-
+zli Goharian. 2018. A discourse-aware attention Mandar Joshi, Eunsol Choi, Daniel Weld, and
+model for abstractive summarization of long docu- Luke Zettlemoyer. 2017. triviaqa: A Large
+ments. arXivpreprintarXiv:1804.05685. Scale Distantly Supervised Challenge Dataset for
+Reading Comprehension. arXiv e-prints, page
+Marie-Catherine De Marneffe, Mandy Simons, and arXiv:1705.03551.
+Judith Tonhauser. 2019. The Commitment-
+Bank: Investigating projection in naturally oc- Daniel Khashabi, Snigdha Chaturvedi, Michael Roth,
+curring discourse. To appear in proceedings of ShyamUpadhyay,andDanRoth.2018. Lookingbe-
+Sinn und Bedeutung 23. Data can be found at yond the surface: A challenge set for reading com-
+https://github.com/mcdm/CommitmentBank/. prehensionovermultiplesentences. InProceedings
+ofthe2018ConferenceoftheNorthAmericanChap-
+Jacob Devlin, Ming-Wei Chang, Kenton Lee, and teroftheAssociationforComputationalLinguistics:
+KristinaToutanova.2018. Bert:Pre-trainingofdeep HumanLanguageTechnologies,Volume1(LongPa-
+bidirectional transformers for language understand- pers),pages252–262.
+ing. arXivpreprintarXiv:1810.04805.
+Daniel Khashabi, Sewon Min, Tushar Khot, Ashish
+Sabharwal, Oyvind Tafjord, Peter Clark, and Han-
+Jay DeYoung, Sarthak Jain, Nazneen Fatema Rajani,
+nanehHajishirzi.2020. Unifiedqa: Crossingformat
+EricLehman, CaimingXiong, RichardSocher, and
+boundarieswithasingleqasystem.
+ByronC.Wallace. Eraser: Abenchmarktoevaluate
+rationalizednlpmodels.
+TusharKhot,AshishSabharwal,andPeterClark.2018.
+SciTail: A textual entailment dataset from science
+WilliamBDolanandChrisBrockett.2005. Automati-
+questionanswering. InAAAI.
+callyconstructingacorpusofsententialparaphrases.
+InProceedingsoftheThirdInternationalWorkshop Johannes Kiesel, Maria Mestre, Rishabh Shukla, Em-
+onParaphrasing(IWP2005). manuel Vincent, Payam Adineh, David Corney,
+Benno Stein, and Martin Potthast. 2019. Semeval-
+Dheeru Dua, Yizhong Wang, Pradeep Dasigi, Gabriel 2019task4: Hyperpartisannewsdetection. InPro-
+Stanovsky, Sameer Singh, and Matt Gardner. 2019. ceedings of the 13th International Workshop on Se-
+Drop: A reading comprehension benchmark requir- manticEvaluation,pages829–839.
+ing discrete reasoning over paragraphs. In Proc. of
+NAACL. Diederik P Kingma and Jimmy Ba. 2014. Adam: A
+method for stochastic optimization. arXiv preprint
+VladimirEidelman.2019. Billsum: Acorpusforauto- arXiv:1412.6980.
+matic summarization of us legislation. In Proceed-
+Tom Kwiatkowski, Jennimaria Palomaki, Olivia Red-
+ingsofthe2ndWorkshoponNewFrontiersinSum-
+field, MichaelCollins, AnkurParikh, ChrisAlberti,
+marization,pages48–56.
+DanielleEpstein,IlliaPolosukhin,MatthewKelcey,
+Jacob Devlin, Kenton Lee, Kristina N. Toutanova,
+Alexander R Fabbri, Irene Li, Tianwei She, Suyi Li,
+Llion Jones, Ming-Wei Chang, Andrew Dai, Jakob
+and Dragomir R Radev. 2019. Multi-news: A
+Uszkoreit, Quoc Le, and Slav Petrov. 2019. Natu-
+large-scale multi-document summarization dataset
+ral questions: a benchmark for question answering
+and abstractive hierarchical model. arXiv preprint
+research. TransactionsoftheAssociationofCompu-
+arXiv:1906.01749.
+tationalLinguistics.
+JunHe,LiqunWang,LiuLiu,JiaoFeng,andHaoWu. Guokun Lai, Qizhe Xie, Hanxiao Liu, Yiming Yang,
+2019. Longdocumentclassificationfromlocalword andEduardHovy.2017. Race: Large-scalereading
+glimpsesviarecurrentattentionlearning. IEEEAc- comprehension dataset from examinations. arXiv
+cess,7:40707–40718. preprintarXiv:1704.04683.
+KarlMoritzHermann,TomasKocisky,EdwardGrefen- Hector Levesque, Ernest Davis, and Leora Morgen-
+stette,LasseEspeholt,WillKay,MustafaSuleyman, stern. 2012. The winograd schema challenge. In
+andPhilBlunsom.2015. Teachingmachinestoread Thirteenth International Conference on the Princi-
+andcomprehend. InAdvancesinneuralinformation ples of Knowledge Representation and Reasoning.
+processingsystems,pages1693–1701. Citeseer.
+5807
+
+Hector J Levesque, Ernest Davis, and Leora Morgen- Yixin Nie, Adina Williams, Emily Dinan, Mohit
+stern. 2011. The Winograd schema challenge. In Bansal,JasonWeston,andDouweKiela.2019. Ad-
+AAAISpringSymposium: LogicalFormalizationsof versarialnli: Anewbenchmarkfornaturallanguage
+CommonsenseReasoning,volume46,page47. understanding. arXivpreprintarXiv:1910.14599.
+Mike Lewis, Yinhan Liu, Naman Goyal, Mar- BoPangandLillianLee.2005. Seeingstars: Exploit-
+jan Ghazvininejad, Abdelrahman Mohamed, Omer ing class relationships for sentiment categorization
+Levy, Ves Stoyanov, and Luke Zettlemoyer. 2019. with respect to rating scales. In Proceedings of the
+Bart: Denoising sequence-to-sequence pre-training ACL.
+for natural language generation, translation, and
+comprehension. arXivpreprintarXiv:1910.13461. Mohammad Taher Pilehvar and Jose Camacho-
+Collados. 2019. WiC: The word-in-context dataset
+Xin Li and Dan Roth. 2002. Learning question clas-
+forevaluatingcontext-sensitivemeaningrepresenta-
+sifiers. In COLING 2002: The 19th International
+tions. InProceedingsofNAACL-HLT.
+ConferenceonComputationalLinguistics.
+Alec Radford, Jeffrey Wu, Rewon Child, David Luan,
+X.Liu,HaoCheng,PengchengHe,W.Chen,YuWang,
+DarioAmodei,andIlyaSutskever.2019. Language
+Hoifung Poon, and Jianfeng Gao. 2020. Adversar-
+modelsareunsupervisedmultitasklearners. OpenAI
+ialtrainingforlargeneurallanguagemodels. ArXiv,
+Blog,1(8):9.
+abs/2004.08994.
+XiaodongLiu,PengchengHe,WeizhuChen,andJian- ColinRaffel,NoamShazeer,AdamRoberts,Katherine
+feng Gao. 2019a. Multi-task deep neural networks Lee, Sharan Narang, Michael Matena, Yanqi Zhou,
+for natural language understanding. arXiv preprint WeiLi, andPeterJLiu.2019. Exploringthelimits
+arXiv:1901.11504. of transfer learning with a unified text-to-text trans-
+former. arXivpreprintarXiv:1910.10683.
+YinhanLiu,MyleOtt,NamanGoyal,JingfeiDu,Man-
+dar Joshi, Danqi Chen, Omer Levy, Mike Lewis, PranavRajpurkar,JianZhang,KonstantinLopyrev,and
+Luke Zettlemoyer, and Veselin Stoyanov. 2019b. Percy Liang. 2016a. Squad: 100,000+ questions
+Roberta: A robustly optimized bert pretraining ap- for machine comprehension of text. arXiv preprint
+proach. arXivpreprintarXiv:1907.11692. arXiv:1606.05250.
+Andrew L. Maas, Raymond E. Daly, Peter T. Pham, PranavRajpurkar,JianZhang,KonstantinLopyrev,and
+Dan Huang, Andrew Y. Ng, and Christopher Potts. Percy Liang. 2016b. Squad: 100,000+ questions
+2011. Learning word vectors for sentiment analy- for machine comprehension of text. arXiv preprint
+sis. In Proceedings of the 49th Annual Meeting of arXiv:1606.05250.
+the Association for Computational Linguistics: Hu-
+man Language Technologies, pages 142–150, Port- Melissa Roemmele, Cosmin Adrian Bejan, and An-
+land, Oregon, USA.AssociationforComputational drewS.Gordon.2011. Choiceofplausiblealterna-
+Linguistics. tives: Anevaluationofcommonsensecausalreason-
+ing. In2011AAAISpringSymposiumSeries.
+Mitchell Marcus, Beatrice Santorini, and Mary Ann
+Marcinkiewicz. 1993. Building a large annotated
+Minjoon Seo, Aniruddha Kembhavi, Ali Farhadi, and
+corpusofenglish: Thepenntreebank.
+Hannaneh Hajishirzi. 2016. Bidirectional attention
+flow for machine comprehension. arXiv preprint
+R.ThomasMcCoy,ElliePavlick,andTalLinzen.2019.
+arXiv:1611.01603.
+Right for the wrong reasons: Diagnosing syntac-
+tic heuristics in natural language inference. CoRR,
+EvaSharma,ChenLi,andLuWang.2019. Bigpatent:
+abs/1902.01007.
+A large-scale dataset for abstractive and coherent
+summarization. arXivpreprintarXiv:1906.03741.
+TodorMihaylov,PeterClark,TusharKhot,andAshish
+Sabharwal.2018. Canasuitofarmorconductelec-
+Richard Socher, Alex Perelygin, Jean Wu, Jason
+tricity?anewdatasetforopenbookquestionanswer-
+ing. arXivpreprintarXiv:1809.02789. Chuang, Christopher D Manning, Andrew Ng, and
+Christopher Potts. 2013. Recursive deep models
+MariusMosbach, MaksymAndriushchenko,andDiet- forsemanticcompositionalityoverasentimenttree-
+rich Klakow. 2020. On the stability of fine-tuning bank. In Proceedings of the 2013 conference on
+bert:Misconceptions,explanations,andstrongbase- empirical methods in natural language processing,
+lines. arXivpreprintarXiv:2006.04884. pages1631–1642.
+Shashi Narayan, Shay B Cohen, and Mirella Lap- Nitish Srivastava, Geoffrey Hinton, Alex Krizhevsky,
+ata. 2018. Don’t give me the details, just the Ilya Sutskever, and Ruslan Salakhutdinov. 2014.
+summary! topic-aware convolutional neural net- Dropout: a simple way to prevent neural networks
+works for extreme summarization. arXiv preprint from overfitting. The journal of machine learning
+arXiv:1808.08745. research,15(1):1929–1958.
+5808
+
+Christian Szegedy, Vincent Vanhoucke, Sergey Ioffe, dataset for diverse, explainable multi-hop question
+Jonathon Shlens, and Zbigniew Wojna. 2015. Re- answering. InConferenceonEmpiricalMethodsin
+thinking the inception architecture for computer vi- NaturalLanguageProcessing(EMNLP).
+sion.corrabs/1512.00567(2015).
+Yang Yi, Yih Wen-tau, and Christopher Meek. 2015.
+Alon Talmor, Jonathan Herzig, Nicholas Lourie, and WikiQA: A Challenge Dataset for Open-Domain
+Jonathan Berant. 2018. Commonsenseqa: A ques- QuestionAnswering. page2013–2018.
+tion answering challenge targeting commonsense
+knowledge. arXivpreprintarXiv:1811.00937. Rowan Zellers, Yonatan Bisk, Roy Schwartz, and
+Yejin Choi. 2018. Swag: A large-scale adversarial
+Alex Wang, Yada Pruksachatkun, Nikita Nangia, datasetforgroundedcommonsenseinference. arXiv
+AmanpreetSingh, JulianMichael, FelixHill, Omer preprintarXiv:1808.05326.
+Levy, andSamuelR.Bowman.2019. SuperGLUE:
+A stickier benchmark for general-purpose language Rowan Zellers, Ari Holtzman, Yonatan Bisk, Ali
+understandingsystems. arXivpreprint1905.00537. Farhadi, and Yejin Choi. 2019. Hellaswag: Can a
+machinereallyfinishyoursentence? arXivpreprint
+Alex Wang, Amanpreet Singh, Julian Michael, Fe- arXiv:1905.07830.
+lix Hill, Omer Levy, and Samuel Bowman. 2018.
+GLUE: A multi-task benchmark and analysis plat- RuiZhangandJoelTetreault.2019. Thisemailcould
+form for natural language understanding. In Pro- saveyourlife: Introducingthetaskofemailsubject
+ceedings of the 2018 EMNLP Workshop Black- linegeneration. InProceedingsofThe57thAnnual
+boxNLP: Analyzing and Interpreting Neural Net- Meeting of the Association for Computational Lin-
+works for NLP, pages 353–355, Brussels, Belgium. guistics,Florence,Italy.
+AssociationforComputationalLinguistics.
+Sheng Zhang, Xiaodong Liu, Jingjing Liu, Jianfeng
+Boxin Wang, Shuohang Wang, Yu Cheng, Zhe Gan, Gao, Kevin Duh, and Benjamin Van Durme. 2018.
+RuoxiJia,BoLi,andJingjingLiu.2021. Info{bert}: Record: Bridging the gap between human and ma-
+Improving robustness of language models from an chinecommonsensereadingcomprehension. arXiv
+information theoretic perspective. In International preprintarXiv:1810.12885.
+ConferenceonLearningRepresentations.
+Xiang Zhang, Junbo Zhao, and Yann LeCun. 2015a.
+AlexWarstadt,AmanpreetSingh,andSamuelRBow- Character-level Convolutional Networks for Text
+man.2018. Neuralnetworkacceptabilityjudgments. Classification. arXiv:1509.01626[cs].
+arXivpreprintarXiv:1805.12471.
+Xiang Zhang, Junbo Jake Zhao, and Yann LeCun.
+JohannesWelbl,NelsonFLiu,andMattGardner.2017. 2015b. Character-level convolutional networks for
+Crowdsourcing multiple choice science questions. textclassification. InNIPS.
+arXivpreprintarXiv:1707.06209.
+Adina Williams, Nikita Nangia, and Samuel Bowman.
+2018a. A broad-coverage challenge corpus for sen-
+tenceunderstandingthroughinference. InProceed-
+ingsofthe2018ConferenceoftheNorthAmerican
+Chapter of the Association for Computational Lin-
+guistics: Human Language Technologies, Volume
+1(LongPapers), pages1112–1122.Associationfor
+ComputationalLinguistics.
+Adina Williams, Nikita Nangia, and Samuel Bowman.
+2018b. Abroad-coveragechallengecorpusforsen-
+tenceunderstandingthroughinference. InProceed-
+ingsofthe2018ConferenceoftheNorthAmerican
+Chapter of the Association for Computational Lin-
+guistics: Human Language Technologies, Volume
+1(LongPapers), pages1112–1122.Associationfor
+ComputationalLinguistics.
+Zhilin Yang, Zihang Dai, Yiming Yang, Jaime Car-
+bonell,RussRSalakhutdinov,andQuocVLe.2019.
+Xlnet: Generalized autoregressive pretraining for
+language understanding. In Advances in neural in-
+formationprocessingsystems,pages5753–5763.
+Zhilin Yang, Peng Qi, Saizheng Zhang, Yoshua Ben-
+gio, William W. Cohen, Ruslan Salakhutdinov, and
+Christopher D. Manning. 2018. HotpotQA: A
+5809
+
+A Appendices 31. Multinews(Fabbrietal.,2019)
+A.1 DatasetsUsed 32. MathQA(Aminietal.,2019)
+1. CoLA(Warstadtetal.,2018)
+33. OpenbookQA(Mihaylovetal.,2018)
+2. SST-2(Socheretal.,2013)
+34. SWAG(Zellersetal.,2018)
+3. MRPC(DolanandBrockett,2005)
+35. HellaSWAG(Zellersetal.,2019)
+4. QQP(Iyeretal.,2017)
+36. RACE(Laietal.,2017)
+5. MNLI(Williamsetal.,2018a)
+37. CommonSenseQA(Talmoretal.,2018)
+6. QNLI(Rajpurkaretal.,2016b)
+38. CosmosQA(Huangetal.,2019)
+7. RTE(Bentivoglietal.,2009)
+39. AI2ARC-Easy(Clarketal.,2018)
+8. WNLI(Levesqueetal.,2012)
+40. AI2ARC-Challenge(Clarketal.,2018)
+9. SuperGLUE(Wangetal.,2019)
+41. SCIQ(Welbletal.,2017)
+10. BoolQ(Clarketal.,2019)
+42. SQUAD(Rajpurkaretal.,2016a)
+11. MultiRC(Khashabietal.,2018)
+43. NQ(Kwiatkowskietal.,2019)
+12. WIC(PilehvarandCamacho-Collados,2019)
+44. DROP(Duaetal.,2019)
+13. WSC(Levesqueetal.,2011)
+45. RECORD(Zhangetal.,2018)
+14. CB(DeMarneffeetal.,2019)
+46. Hotpot(Yangetal.,2018)
+15. COPA(Roemmeleetal.,2011)
+47. TriviaQA(Joshietal.,2017)
+16. AGNews(Zhangetal.,2015b)
+A.2 Hyperparameters
+17. IMDB(Maasetal.,2011)
+18. MultiNLI(Williamsetal.,2018b)
+Hyperparameter Value
+19. SNLI(Bowmanetal.,2015) Optimizer Adam
+Adam-betas (0.9,0.999)
+20. HANS(McCoyetal.,2019)
+Adam-eps 1e-8
+LR 6e-05
+21. RottenTomatoes(PangandLee,2005)
+LRScheduler polynomialdecay
+22. YelpPolarity(Zhangetal.,2015a) Dropout 0.1
+WeightDecay 0.01
+23. EraserMultiRC(DeYoungetal.)
+WarmupUpdates 5000
+24. WikiQA(Yietal.,2015) TotalUpdates 200000
+MaxTokens 1024
+25. Trec(LiandRoth,2002;Hovyetal.,2001)
+Table7: Hyperparametersforpre-finetuningBART
+26. SciTail(Khotetal.,2018)
+27. CNNDailyMail(Hermannetal.,2015)
+28. Billsum(Eidelman,2019)
+29. XSUM(Narayanetal.,2018)
+30. Aeslc(ZhangandTetreault,2019)
+5810
+
+Hyperparameter Value
+Optimizer Adam
+Adam-betas (0.9,0.999)
+Adam-eps 1e-8
+LR 3e-05
+LRScheduler polynomialdecay
+Dropout 0.1
+WeightDecay 0.01
+WarmupUpdates 5000
+TotalUpdates 200000
+MaxTokens 4400
+Table8:Hyperparametersforpre-finetuningRoBERTa-
+BandRoBERTa-L
+5811
