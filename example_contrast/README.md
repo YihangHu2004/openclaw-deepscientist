@@ -6,38 +6,41 @@
 
 ```
 example_contrast/
-├── README.md
-├── hallucination_check.py          # 批量分析脚本（在根目录运行）
+├── README.md                          # 本文件
+├── hallucination_check.py            # 批量分析脚本
+├── hallucination_visualize.py        # 可视化脚本
+├── hallucination_comparison.png      # 各项目幻觉率对比柱状图
+├── hallucination_overall.png         # 整体幻觉率对比饼图
 │
-├── lima-alignment/                  # 论文1: LIMA: Less Is More for Alignment
-│   ├── paper/                       # 论文 PDF 存放位置
-│   ├── evidence.json                # DeepClaw Agent 证据
-│   ├── deepseek_evidence.json        # DeepSeek（普通大模型）证据
-│   └── hallucination_check.py       # 单篇分析脚本
+├── lima-alignment/                   # 论文1: LIMA: Less Is More for Alignment
+│   ├── paper/                        # 论文 PDF
+│   ├── evidence.json                 # DeepClaw Agent 证据
+│   ├── deepseek_evidence.json       # DeepSeek（普通大模型）证据
+│   └── deepseek_report.md            # DeepSeek 分析报告
 │
-├── llm-data-creation/              # 论文2: LLM 作为数据创造器
+├── llm-data-creation/                # 论文2: LLM 作为数据创造器
 │   ├── paper/
 │   ├── evidence.json
-│   ├── deepseek_json.json
-│   └── hallucination_check.py
+│   ├── deepseek_evidence.json
+│   └── deepseek_report.md
 │
-├── llm-data-selection/              # 论文3: 基于学习百分比选择训练数据
+├── llm-data-selection/                # 论文3: 基于学习百分比选择训练数据
 │   ├── paper/
 │   ├── evidence.json
-│   ├── deepseek_json.json
-│   └── hallucination_check.py
+│   ├── deepseek_evidence.json
+│   └── deepseek_report.md
 │
-├── multi-task-pretraining/          # 论文4: MUPPET 多任务预训练
+├── multi-task-pretraining/            # 论文4: MUPPET 多任务预训练
 │   ├── paper/
 │   ├── evidence.json
-│   ├── deepseek_json.json
-│   └── hallucination_check.py
+│   ├── deepseek_evidence.json
+│   └── deepseek_report.md
 │
 └── unified-qa/                      # 论文5: UNIFIEDQA 统一问答模型
     ├── paper/
     ├── evidence.json
-    ├── deepseek_json.json
-    └── hallucination_check.py
+    ├── deepseek_evidence.json
+    └── deepseek_report.md
 ```
 
 ## 数据说明
@@ -49,7 +52,7 @@ DeepClaw Agent 生成的证据文件，包含：
 - `audit_result`: 审计结果（faithful/drifted/unsupported）
 
 ### deepseek_evidence.json
-普通大模型（如 DeepSeek）直接阅读论文后生成的证据文件，无证据链约束。
+普通大模型（DeepSeek）直接阅读论文后生成的证据文件，无证据链约束。
 
 ## 运行方法
 
@@ -59,10 +62,9 @@ cd example_contrast
 python hallucination_check.py
 ```
 
-### 单篇分析（在具体论文文件夹运行）
+### 生成可视化图表
 ```bash
-cd example_contrast/lima-alignment
-python hallucination_check.py
+python hallucination_visualize.py
 ```
 
 ## 幻觉率计算
@@ -78,6 +80,52 @@ python hallucination_check.py
 | drifted | 部分幻觉（扩大范围/夸大） |
 | unsupported | 完全幻觉（无原文支撑） |
 
-## 预期结果
+---
 
-DeepClaw Agent 的幻觉率应显著低于普通大模型，证明证据协议的有效性。
+## 对比结果
+
+### 各项目幻觉率对比
+
+| 项目 | DeepClaw Agent | DeepSeek (Regular LLM) | 差异 |
+|------|---------------|------------------------|------|
+| lima-alignment | 0.00% | 12.50% | **-12.50%** |
+| llm-data-creation | 6.67% | 16.67% | **-10.00%** |
+| llm-data-selection | 7.69% | 6.25% | +1.44% |
+| multi-task-pretraining | 0.00% | 9.09% | **-9.09%** |
+| unified-qa | 5.88% | 7.14% | **-1.26%** |
+| **整体** | **4.17%** | **10.14%** | **-5.98%** |
+
+### 整体统计
+
+| 模型 | 总证据数 | 已审计 | 漂移 | 无据 | 幻觉率 |
+|------|---------|--------|------|------|--------|
+| DeepClaw Agent | 77 | 72 | 3 | 0 | **4.17%** |
+| DeepSeek (Regular LLM) | 69 | 69 | 6 | 1 | **10.14%** |
+
+**整体幻觉率差异: +5.98%**
+→ **DeepClaw Agent 整体幻觉率降低了 58.93%**
+
+### 可视化图表
+
+#### 1. 各项目幻觉率对比柱状图
+![Hallucination Comparison](hallucination_comparison.png)
+
+#### 2. 整体幻觉率对比饼图
+![Overall Comparison](hallucination_overall.png)
+
+---
+
+## 结论
+
+1. **DeepClaw Agent 在 5 个项目中的 4 个项目上幻觉率低于 DeepSeek**
+   - lima-alignment: 0.00% vs 12.50% (-12.50%)
+   - llm-data-creation: 6.67% vs 16.67% (-10.00%)
+   - multi-task-pretraining: 0.00% vs 9.09% (-9.09%)
+   - unified-qa: 5.88% vs 7.14% (-1.26%)
+
+2. **DeepClaw Agent 整体幻觉率为 4.17%，比 DeepSeek (10.14%) 降低了 58.93%**
+
+3. **证据链协议的有效性得到验证**：DeepClaw Agent 通过证据链约束，显著降低了幻觉率
+
+---
+
