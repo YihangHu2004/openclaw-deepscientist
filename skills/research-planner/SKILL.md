@@ -189,5 +189,36 @@ python scripts/passport.py <slug> sign state/projects/<slug>/project.md 5
 python scripts/gate_check.py <slug> 5
 ```
 
-- PASS → 更新 TODO.md `[x] 阶段 5：研究规划`，进入 S6 report-writer
-- FAIL → 展示缺失项，执行 SCIENTIST.md §1.6 失败处理流程（通常需补充数值指标或数据集来源）
+- FAIL → 展示缺失项，执行 SCIENTIST.md §1.6 失败处理流程
+
+- PASS → 执行 **Step 3：方向确定后 EV 缺口检查**（必须，不可跳过）
+
+```bash
+# 3. 查询当前研究方向相关的已有 EV
+python scripts/ev_manager.py <slug> list --stage all
+```
+
+根据研究计划（baseline / dataset / 核心方法）逐项核查以下内容是否已有 EV 支撑：
+
+| 需要 EV 的项目 | 检查内容 |
+|--------------|---------|
+| 每个 **baseline 方法** | 是否有来源论文 EV + 原始指标数值 |
+| 每个 **数据集** | 是否有规模/分割方式/来源 EV |
+| **核心方法/假设** | 是否有技术选型依据 EV |
+| **研究 Gap** | 是否有 ≥ 2 条直接支撑 Gap 存在的 EV |
+
+对每个缺失项，执行 **定向补充精读**（返回 S3，只精读该项对应的论文，不重跑全部 S3）：
+```bash
+# 定向精读缺失 EV 对应的论文，提取后立即写入 evidence.json
+python scripts/ev_manager.py <slug> add ...
+```
+
+所有缺口填补后，在 project.md 记录：
+```markdown
+## S5 EV 缺口补充 · {日期}
+- baseline {X}：补充 EV-{id}（原始指标 {数值}）
+- dataset {Y}：补充 EV-{id}（规模 {N} 样本）
+- 无缺口项：{列表}
+```
+
+EV 缺口全部填补后 → 更新 TODO.md `[x] 阶段 5：研究规划`，进入 S6 report-writer
