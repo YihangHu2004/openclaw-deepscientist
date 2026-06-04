@@ -219,7 +219,12 @@ python scripts/ev_manager.py <slug> list --stage all
 | **核心方法/假设** | 是否有技术选型依据 EV |
 | **研究 Gap** | 是否有 ≥ 2 条直接支撑 Gap 存在的 EV |
 
-对每个缺失项，执行 **定向补充精读**（返回 S3，只精读该项对应的论文，不重跑全部 S3）：
+对每个缺失项，按以下优先级补充（**重读优先，搜索其次**）：
+
+1. **优先：定向重读**（search_cache.json 中已有该论文）→ 返回 S3 对该论文单独精读，提取所需 EV
+2. **次选：补充搜索**（已有论文中找不到该 EV）→ 返回 S1/S2 针对缺口关键词补搜，找到后精读提取
+3. 不得跳过以上两步直接标注 `[MATERIAL GAP]`——`[MATERIAL GAP]` 仅用于穷尽以上两步后仍无文献依据的情况
+
 ```bash
 # 定向精读缺失 EV 对应的论文，提取后立即写入 evidence.json
 python scripts/ev_manager.py <slug> add ...
