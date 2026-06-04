@@ -4,6 +4,36 @@
 
 **不适用**：快速批量扫读（→ arxiv-search 摘要速览）；搜索论文（→ arxiv-search / semantic-scholar）。
 
+## 精读选择策略
+
+**目标**：覆盖领域全貌，不设固定数量上限，以维度覆盖为停止条件。
+
+### 精读优先级排序
+
+1. `citation_threshold` 来源（citation ≥ 200）的 priority 论文 → 最优先
+2. `dimension_tag = seminal` 的 priority 论文 → 必读
+3. `dimension_tag = sota` 的 priority 论文 → 必读
+4. 每个 `method_*` 流派得分最高的 1-2 篇 → 必读
+5. `dimension_tag = challenge` 的 priority 论文 → 必读
+6. `dimension_tag = recent` 的 priority 论文 → 必读
+7. 剩余 priority 论文按 Triage 分从高到低补充
+
+### 精读停止条件（维度覆盖门）
+
+满足以下全部条件才停止，否则继续读下一篇：
+
+```
+✓ seminal     ≥ 1 篇已精读
+✓ sota        ≥ 1 篇已精读
+✓ method_*    已识别的每个方法流派各 ≥ 1 篇已精读
+✓ challenge   ≥ 1 篇已精读
+✓ recent      ≥ 1 篇已精读
+✓ 继续精读不再带来新维度或新方法流派的论文
+```
+
+维度有缺口 → 返回 S1/S2 针对缺口层补搜，补搜后继续精读。
+所有维度满足 → 停止，不强制追加篇数。
+
 ---
 
 ## Trajectory Memory Protocol
@@ -171,7 +201,8 @@ Map-Reduce 处理的论文 EV 记录 source_type 标 `map_reduce_full_text`，co
 
 | 条件 | 要求 |
 |------|------|
-| 结构化笔记 | ≥ 5 篇，每篇 4 字段非空（研究问题/核心方法/主要结果/局限性） |
+| 维度覆盖 | seminal / sota / challenge / recent 各 ≥ 1 篇精读，每个 method_* 流派 ≥ 1 篇精读 |
+| 结构化笔记 | 每篇 4 字段非空（研究问题/核心方法/主要结果/局限性） |
 | EV 记录 | evidence.json 中每篇 ≥ 2 条 EV，共 ≥ 10 条 |
 | EV 来源 | EV 记录 source_type 不得全为 abstract_only |
 | EV 验证 | verified = true（来自实际抓取，非内存重建） |

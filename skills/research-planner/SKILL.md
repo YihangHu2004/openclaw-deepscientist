@@ -16,7 +16,35 @@ trajectory memory as evidence.
 
 ## 工作流
 
-**Step 0：查询基线注册表**
+**Step 0：优先复用已有知识（搜索前必须执行）**
+
+在做任何方向分析或搜索之前，先穷尽已有材料：
+
+```
+① python scripts/evidence_memory.py <slug> query "<研究方向>" --top-k 10
+  → 检索 S3 精读积累的所有 EV，找出与候选方向相关的已有证据
+
+② 读取 project.md 的「Research Gap」和「综述草稿」章节
+  → S4 已识别的 Gap 直接作为方向候选来源，不重新推导
+
+③ 读取 state/baselines.json，匹配当前领域标签
+  → 命中 → 直接复用，无需搜索
+```
+
+**基于已有材料能回答的问题，禁止发起新搜索。**
+
+判断是否需要补充搜索（三类情况，每类独立判断）：
+
+| 问题 | 已有材料够用？ | 行动 |
+|------|-------------|------|
+| 方向是否已有人做了？ | S1-S3 维度覆盖了 recent + sota | 直接查 evidence_memory，不搜索 |
+| baseline 代码是否可用？ | S3 笔记有 repo 链接 | 直接用，不搜索 |
+| baseline 代码是否可用？ | S3 笔记没有 repo 链接 | 针对性查该论文 repo，不展开搜索 |
+| 数据集 split 细节？ | S3 EV 有记录 | 直接用 |
+| 数据集 split 细节？ | S3 EV 没有 | 查官方文档，不搜索新论文 |
+| 方向时效（近期有无新论文）？ | S1-S2 距今 > 1 周 | 1-2 次定向 arXiv 查询，不重跑 Ladder |
+
+**查询基线注册表**
 
 读取 `state/baselines.json`，匹配当前领域标签：
 - 命中 → 直接复用已知数据集/基线，无需重新搜索
@@ -42,8 +70,39 @@ trajectory memory as evidence.
 **内部采用 Planner-Executor 微架构**：
 1. Socratic 对话 → 引导用户明确方向（见上）
 2. PLANNER 分析 Gap → 提出 2-3 个候选方向（含可行性评分）→ **等待用户选择**
-3. 用户选择方向后 → EXECUTOR 具体化实验设计
+3. 用户选择方向后 → **补充决策点**（见下）→ EXECUTOR 具体化实验设计
 4. PLANNER 验证可行性 → 输出完整计划
+
+---
+
+**补充决策点（用户选定方向后、EXECUTOR 开始前执行）**
+
+基于选定方向，检查以下四个缺口，有缺口触发对应补充，无缺口直接进入 EXECUTOR：
+
+```
+缺口 1：选定方向涉及 S1-S3 未覆盖的 method_* 流派
+  → S5 内部执行定向 arXiv 查询：该流派关键词 top-k(20)
+  → 对新论文打 Triage + dimension_tag，新 EV 写入 evidence.json 并更新 evidence_memory
+
+缺口 2：选定方向的对立证据不足（evidence_memory 中 challenge 类 EV < 2 条）
+  → S5 内部执行定向 arXiv 查询："{方向} challenges" / "{方法} limitations" top-k(20)
+  → 新 EV 写入 evidence.json，更新 evidence_memory
+
+缺口 3：S1-S2 距今 > 1 周，选定方向时效不确定
+  → S5 内部执行 1-2 次定向 arXiv 查询（选定方向关键词 + sortBy=submittedDate）
+  → 有新论文 → 摘要级评估，判断是否影响方向选择
+  → 无新论文 → 记录「时效已确认」，继续
+
+缺口 4：选定 baseline 无 repo 链接或代码可用性未知
+  → S5 内部直接查该论文主页 / GitHub，不做 arXiv 搜索
+  → 可用 → 记录 repo 链接到 baselines.json
+  → 不可用 → 切换备选 baseline，不阻塞流程
+```
+
+补充完成后重新检查，直到无缺口。
+**禁止**重跑 S1-S2 全部 Ladder，每次补充必须范围明确。
+
+---
 
 ---
 

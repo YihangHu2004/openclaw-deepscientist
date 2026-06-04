@@ -237,9 +237,11 @@ function normaliseContent(raw: unknown): ContentBlock[] {
       case 'thinking':
         return { type: 'thinking' as const, thinking: block.thinking ?? '' };
       case 'tool_use':
-        return { type: 'toolCall' as const, id: block.id, name: block.name, arguments: block.input };
+      case 'toolCall':
+        return { type: 'toolCall' as const, id: block.id, name: block.name, arguments: (block as {arguments?: unknown}).arguments ?? block.input };
       case 'tool_result':
-        return { type: 'toolResult' as const, id: block.id, result: block.content };
+      case 'toolResult':
+        return { type: 'toolResult' as const, id: block.id, result: block.content ?? (block as {result?: unknown}).result };
       default:
         return { type: 'text' as const, text: JSON.stringify(block) };
     }

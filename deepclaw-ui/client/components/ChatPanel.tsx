@@ -15,9 +15,11 @@ function historyToChat(hm: HistoryMessage): ChatMessage {
         switch (b.type) {
           case 'text':       return { type: 'text' as const, text: b.text ?? '' };
           case 'thinking':   return { type: 'thinking' as const, thinking: b.thinking ?? '' };
-          case 'tool_use':   return { type: 'toolCall' as const, id: b.id, name: b.name, arguments: b.input };
-          case 'tool_result':return { type: 'toolResult' as const, id: b.id, result: b.content };
-          default:           return { type: 'text' as const, text: JSON.stringify(b) };
+          case 'tool_use':    return { type: 'toolCall'  as const, id: b.id, name: b.name,  arguments: b.input ?? (b as {arguments?: unknown}).arguments };
+          case 'toolCall':    return { type: 'toolCall'  as const, id: b.id, name: b.name,  arguments: (b as {arguments?: unknown}).arguments ?? b.input };
+          case 'tool_result': return { type: 'toolResult' as const, id: b.id, result: b.content ?? (b as {result?: unknown}).result };
+          case 'toolResult':  return { type: 'toolResult' as const, id: b.id, result: (b as {result?: unknown}).result ?? b.content };
+          default:            return { type: 'text' as const, text: JSON.stringify(b) };
         }
       })
     : [{ type: 'text' as const, text: String(raw ?? '') }];

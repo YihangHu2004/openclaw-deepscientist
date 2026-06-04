@@ -16,6 +16,7 @@
 | R5 | `init_project.py` 运行是否成功（退出码 0）？ | 脚本报错但仍继续执行下一步 | 停止，向用户展示错误，等待确认后重试 |
 | **R6** | **PDF-INPUT 模式下，PDF-0-D（问 slug+mode）和 PDF-0-E（init_project.py）是否已完成？** | 在问用户选择方向 / slug / 模式之前就输出了研究分析 | 停止，撤销分析内容，从 PDF-0-D 重新开始 |
 | **R7** | **用户上传 PDF 时，是否严格按照 PDF-0-A→B→C→D→E 五步顺序执行？** | 跳过了中间某一步（如直接输出分析而未问 slug） | 停止，回到被跳过的步骤重新执行 |
+| **R8** | **进入新的研究阶段前，是否已执行 trajectory-memory retrieve 并展示了 MEMORY CHECK CARD？** | 未执行 retrieve 直接开始搜索/精读/写作等工作 | 停止，执行 `python scripts/trajectory_logger.py <slug> retrieve --requester-phase "<阶段名>" --source trajectory_context.md --source trajectory_memory.jsonl --n 5 --output both`，展示卡片后再继续 |
 
 ---
 
@@ -27,6 +28,7 @@
 | Y2 | evidence.json 条目是否 ≥ 10？ | S3 精读门控前必须确认 |
 | Y3 | 本次搜索是否命中了 search_cache.json？ | 24h 内同 key 不重复请求 |
 | Y4 | 引用的论文是否有对应 EV-xxx 记录？ | 无来源声明禁止写入报告 |
+| Y5 | 之前的 meaningful action（搜索、精读、写入等）是否已通过 trajectory_logger.py log 记录了？ | 有工具调用/文件写入但 jsonl 中无对应记录 | 补录后再进入下一阶段 |
 
 ---
 
