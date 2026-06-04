@@ -50,11 +50,15 @@ evidence.
 - 覆盖率：{N/M}%
 ```
 
-### Step 2：取回原文
+### Step 2：取回原文（必须在 Step 3 前完成，结果带入 Step 3）
 
-对每条抽到的 EV，重新获取 `original_text` 对应的论文段落（`web_fetch arxiv.org/html/{paper_id}`），与 evidence.json 中存储的 `original_text` 比对：
-- 一致 → `fetch_verified: true`
-- 不一致（论文已更新版本）→ 标注 `fetch_verified: false`，更新 original_text
+对每条抽到的 EV，执行 `web_fetch arxiv.org/html/{paper_id}`，找到 `original_text` 所在的**完整段落**（上下文各扩展 2-3 句），确认：
+- evidence.json 中的 `original_text` 是否与论文原文一致
+  - 一致 → `fetch_verified: true`
+  - 不一致 → 标注 `fetch_verified: false`，更新 original_text 为论文实际内容
+- 存储的摘录是否**断章取义**——原文段落的上下文是否改变了该句的含义（如加了否定、限定条件、或实验失败的说明）
+
+> ⚠️ **Step 2 的结果必须用于 Step 3**：Step 3 的 ① original_text 栏填写的是**论文取回段落**（含上下文），而非直接复制 evidence.json 中的摘录。若无法 web_fetch（论文不可访问），则标注 `fetch_verified: skipped`，Step 3 仍使用 evidence.json 原文，但需在理由中注明未回查原文。
 
 ### Step 3：逐条核查（Claim vs Original）
 
@@ -67,14 +71,15 @@ evidence.
 
 ```
 【EV-xxx 审计】
-① original_text：{从 evidence.json 原文粘贴，不得省略或改写}
-② claim_text：{从 evidence.json claim 字段粘贴}
-③ report 引用句：{从 report.md 找到 [EV-xxx] 所在的完整句子粘贴}
-④ 判定：faithful / drifted / unsupported
-⑤ 理由：{一句话说明为何如此判定，faithful 也必须写}
+① 论文原文段落：{Step 2 取回的完整段落，含上下文，非 evidence.json 摘录}
+② original_text（存储版）：{evidence.json 中的摘录，用于确认是否断章取义}
+③ claim_text：{从 evidence.json claim 字段粘贴}
+④ report 引用句：{从 report.md 找到 [EV-xxx] 所在的完整句子粘贴}
+⑤ 判定：faithful / drifted / unsupported
+⑥ 理由：{说明 ①②③④ 四者间是否有 drift，faithful 也必须写}
 ```
 
-> ⚠️ **跳过任何一段直接执行命令 = 无效审计**。若 original_text / claim_text 与 report 引用句三者均未粘贴，该条 EV 不计入已审数量。
+> ⚠️ **跳过任何一段直接执行命令 = 无效审计**。① 论文原文段落未取回（且未标注 `fetch_verified: skipped`），该条 EV 不计入已审数量。
 
 **第二步：写完对比后立即执行命令**
 
