@@ -120,7 +120,7 @@ EV 候选：
 
 1. **去重**：合并重复出现的主张和数据点（保留出现次数最多的原文版本）
 2. **排序**：按重要性排列（实验数值 > 方法核心 > 背景描述）
-3. **EV 筛选**：从所有 EV 候选中选取最强的 ≤ 10 条，调用 ev_manager.py 写入 evidence.json
+3. **EV 筛选**：从所有 EV 候选中选取最强的条目写入 evidence.json，**无固定上限**——普通论文通常 5–10 条，survey / 综述类论文应提取 15–30 条。EV 数量由论文实际内容决定，**不得因达到某个数字而提前停止**。
 4. **输出**：填写标准结构化笔记模板（研究问题 / 核心方法 / 实验设置 / 主要结果 / 局限性）
 
 Reduce 完成后删除所有 `tmp_map_*` 临时文件。
@@ -203,7 +203,7 @@ Map-Reduce 处理的论文 EV 记录 source_type 标 `map_reduce_full_text`，co
 |------|------|
 | 维度覆盖 | seminal / sota / challenge / recent 各 ≥ 1 篇精读，每个 method_* 流派 ≥ 1 篇精读 |
 | 结构化笔记 | 每篇 4 字段非空（研究问题/核心方法/主要结果/局限性） |
-| EV 记录 | evidence.json 中每篇 ≥ 2 条 EV，共 ≥ 10 条 |
+| EV 记录 | evidence.json 中每篇 ≥ 2 条 EV，共 ≥ 10 条（**下限，非目标**；survey 论文单篇应达 15–30 条） |
 | EV 来源 | EV 记录 source_type 不得全为 abstract_only |
 | EV 验证 | verified = true（来自实际抓取，非内存重建） |
 | [MATERIAL GAP] | 每篇笔记中标注数量记入 SUMMARY.md gap_count |
