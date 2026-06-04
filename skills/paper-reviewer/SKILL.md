@@ -152,15 +152,20 @@ DA 的任务是**主动寻找问题**，而非按维度评分：
 ```
 改进内容 → 分类路由：
   · 内容/论证问题 → 返回 S6 修改 report.md
-  · 引用漂移问题 → 返回 S8 运行 claim-auditor
+  · 引用漂移问题 → 返回 S7 运行 claim-auditor
   · 文献缺失问题 → 返回 S3 补充精读
 
-修改完成后：
-  1. python scripts/passport.py <slug> sign state/projects/<slug>/report.md 9
-  2. python scripts/gate_check.py <slug> 6   ← 验证修改后的报告仍通过 S6 门
+修改完成后（必须按顺序执行，不可跳步）：
+  1. python scripts/passport.py <slug> sign state/projects/<slug>/report.md 8
+  2. python scripts/gate_check.py <slug> 6   ← 验证修改后报告仍通过 S6 门
   3. 在 review/ 目录追加修订记录：
        review/revision_{日期}.md（记录：哪些问题已解决 / 哪些有意保留）
   4. improvement_counts["s8"] += 1（写入 pipeline_state.json）
+  5. ⚠️ 重新运行 S8 评审（针对改动章节）：
+       · 仅修改了个别章节 → 使用 `methodology` 模式重跑，聚焦被修改的章节
+       · 修改了核心论点/假设 → 使用 `full` 模式完整重跑
+       · 重审必须生成新的 peer_review_{日期}.md，不得在旧评审文件上追加覆盖
+  6. 重审若仍发现 DA-CRITICAL → 继续本循环；若无 DA-CRITICAL → 进入验收门
 ```
 
 **改进轮次限制**：最多 3 轮。第 3 轮后若仍有 DA-CRITICAL 未解决，强制选 [3]（接受现状并注明）。
@@ -209,16 +214,19 @@ python scripts/passport.py <slug> sign state/projects/<slug>/review/peer_review_
 
 # 2. 展示改进清单卡片，等待用户选择（见「改进循环」节）
 
-# 3a. 若选 [1]/[2]：修改报告后执行
+# 3a. 若选 [1]/[2]：修改 → 重审循环
 python scripts/passport.py <slug> sign state/projects/<slug>/report.md 8
-python scripts/gate_check.py <slug> 6    # 确认修改后报告仍通过 S6 报告完整门
+python scripts/gate_check.py <slug> 6       # 确认修改后报告仍通过 S6 门
+# ⚠️ 重新运行 S8（新文件，不覆盖旧评审）：
+#   局部修改 → methodology 模式；核心论点修改 → full 模式
+python scripts/passport.py <slug> sign state/projects/<slug>/review/peer_review_{日期_新}.md 8
 
 # 3b. 若选 [3]：在 report.md 追加「已知局限」节即可
 
 # 4. 签署修订记录（若有改进）
 python scripts/passport.py <slug> sign state/projects/<slug>/review/revision_{日期}.md 8
 
-# 5. 运行评审完整门
+# 5. 运行评审完整门（最终无 DA-CRITICAL 后才能通过）
 python scripts/gate_check.py <slug> 8
 ```
 
