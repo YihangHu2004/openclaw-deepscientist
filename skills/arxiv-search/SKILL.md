@@ -50,8 +50,18 @@ https://export.arxiv.org/api/query?search_query={query}&start=0&max_results=20&s
 
 API 调用：
 1. `web_fetch` 获取 Atom XML，解析 `<id>` / `<title>` / `<author>` / `<published>` / `<summary>`
-2. 429 处理：等待 10 秒重试一次；仍失败改用 `web_search`
-3. 写入 search_cache.json（key = SHA1(query + "\n" + max_results)[:12]）
+2. 写入 search_cache.json（key = SHA1(query + "\n" + max_results)[:12]）
+
+**429 三级降级链**（按顺序尝试，前级恢复后不强制切回）：
+
+| 级别 | 触发条件 | 方案 |
+|------|---------|------|
+| **Fallback 1** | arXiv API 首次 429 | 等待 30 秒，线性退避重试最多 5 次（30→60→90→120→150s） |
+| **Fallback 2** | 5 次重试全部失败 | 改用 Semantic Scholar MCP `search_papers(query, limit=20)`，从返回结果中提取 arXiv ID，再用 `web_fetch arxiv.org/abs/{id}` 取摘要和元数据 |
+| **Fallback 3** | S2 MCP 也不可用 | `web_search "arxiv {关键词} {年份}"` 获取 arXiv ID 列表，再逐条 `web_fetch arxiv.org/abs/{id}`（⚠️ 每次间隔 ≥ 5 秒） |
+| **Fallback 4** | 以上全部失败 | `web_fetch "https://arxiv.org/search/?query={关键词}&searchtype=all"` 直接抓搜索页面（非 API 路径，不受 API 限速影响） |
+
+> 💡 关键：`arxiv.org/abs/`、`arxiv.org/html/`、`arxiv.org/search/` 是**页面路径**，与 `export.arxiv.org` API 限速独立，API 429 不影响页面访问。
 
 **Step 2：异议文献搜索**（必须额外执行一次，独立于三层 Ladder）
 - 查询模板：`"challenges to {主题}"` / `"limitations of {方法}"` / `"criticism of {假设}"`
