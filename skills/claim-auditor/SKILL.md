@@ -18,6 +18,7 @@ append a `S7_ClaimAudit` trajectory record. Do not treat trajectory memory as
 evidence.
 
 > ⚠️ **禁止自生成审计脚本**：不得编写 run_audit.py 或任何自定义审计代码替代本流程。
+> ⚠️ **禁止批量打标**：不得用循环、脚本、或一次性对多条 EV 统一调用 `audit faithful`。每条 EV 必须独立判定。
 > 门控必须且只能通过 `python scripts/gate_check.py <slug> 7` 执行。
 
 ## 审计流程（5 步）
@@ -60,7 +61,22 @@ evidence.
 > ⚠️ **强制写入规则**：每判定一条 EV，**立即**执行对应的 `ev_manager.py audit` 命令。
 > 不得将审计结果仅记录在独立 markdown 文件中而跳过此命令——独立文件不是 evidence.json，gate_check.py 读不到。
 
-对每条抽样 EV，判断后**当场执行**：
+对每条抽样 EV，**必须按以下顺序操作，不可跳步**：
+
+**第一步：写出三段对比（执行命令前的强制输出）**
+
+```
+【EV-xxx 审计】
+① original_text：{从 evidence.json 原文粘贴，不得省略或改写}
+② claim_text：{从 evidence.json claim 字段粘贴}
+③ report 引用句：{从 report.md 找到 [EV-xxx] 所在的完整句子粘贴}
+④ 判定：faithful / drifted / unsupported
+⑤ 理由：{一句话说明为何如此判定，faithful 也必须写}
+```
+
+> ⚠️ **跳过任何一段直接执行命令 = 无效审计**。若 original_text / claim_text 与 report 引用句三者均未粘贴，该条 EV 不计入已审数量。
+
+**第二步：写完对比后立即执行命令**
 
 | 结果 | 判定标准 | 立即执行的命令 |
 |------|---------|--------------|
