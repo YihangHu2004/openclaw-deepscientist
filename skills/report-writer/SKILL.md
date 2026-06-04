@@ -99,15 +99,27 @@ import markdown, datetime
 with open('report.md', encoding='utf-8') as f:
     body = markdown.markdown(f.read(), extensions=['tables','fenced_code','toc'])
 
-css = """body{font-family:-apple-system,'PingFang SC',sans-serif;max-width:800px;
-  margin:0 auto;padding:40px 20px;background:#fafafa;color:#222;line-height:1.7}
-h1,h2,h3{color:#1a1a2e;border-bottom:1px solid #e0e0e0;padding-bottom:8px}
-table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:8px 12px}
-th{background:#f0f4ff}code{background:#f4f4f4;padding:2px 6px;border-radius:4px}
-pre{background:#f4f4f4;padding:16px;border-radius:8px;overflow-x:auto}
-blockquote{border-left:4px solid #4a90e2;padding-left:16px;color:#555}"""
+css = """
+:root{color-scheme:light}
+*{box-sizing:border-box}
+body{font-family:-apple-system,'PingFang SC','Helvetica Neue',sans-serif;max-width:860px;
+  margin:0 auto;padding:48px 28px;background:#ffffff !important;color:#1a1a1a !important;line-height:1.8}
+h1{font-size:1.9em;color:#0f172a !important;border-bottom:2px solid #e2e8f0;padding-bottom:12px;margin-top:0}
+h2{font-size:1.4em;color:#1e3a5f !important;border-bottom:1px solid #e2e8f0;padding-bottom:8px;margin-top:2em}
+h3{font-size:1.15em;color:#334155 !important;margin-top:1.5em}
+p{color:#1a1a1a !important}
+a{color:#2563eb !important}
+table{border-collapse:collapse;width:100%;margin:1em 0}
+th,td{border:1px solid #cbd5e1;padding:8px 14px;color:#1a1a1a !important;background:#ffffff !important}
+th{background:#f1f5f9 !important;font-weight:600}
+tr:nth-child(even) td{background:#f8fafc !important}
+code{background:#f1f5f9 !important;color:#0f172a !important;padding:2px 6px;border-radius:4px;font-size:.9em}
+pre{background:#f1f5f9 !important;color:#0f172a !important;padding:16px;border-radius:8px;overflow-x:auto}
+blockquote{border-left:4px solid #3b82f6;padding-left:16px;color:#475569 !important;background:#f8fafc !important;margin:1em 0;padding:12px 16px;border-radius:0 6px 6px 0}
+hr{border:none;border-top:1px solid #e2e8f0;margin:2em 0}
+"""
 
-html = f'<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><style>{css}</style></head><body>{body}<hr><p style="color:#999;text-align:center;font-size:.85em">由DeepClaw 🦞 生成 · {datetime.date.today()}</p></body></html>'
+html = f'<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="color-scheme" content="light"><style>{css}</style></head><body>{body}<hr><p style="color:#94a3b8 !important;text-align:center;font-size:.85em">由DeepClaw 🦞 生成 · {datetime.date.today()}</p></body></html>'
 with open('report.html','w',encoding='utf-8') as f:
     f.write(html)
 print("report.html 已生成")
