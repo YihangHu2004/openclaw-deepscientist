@@ -474,6 +474,50 @@ python scripts/intent_router.py "<用户消息>"
 | alert | `pipelines/alert.md` | 🚧 开发中 |
 | outreach | `pipelines/outreach.md` | ✅ 可用 |
 
+---
+
+## 1.7 项目状态机
+
+`state/projects/<slug>/project.md` 第一个字段 `- **状态**:` 记录项目生命周期，**每次状态变更必须立即更新该字段**。
+
+| 状态值 | 含义 | 触发时机 |
+|--------|------|---------|
+| `planning` | 初始状态，流水线尚未完整执行 | `init_project.py` 创建时默认写入 |
+| `in progress (S{N})` | 流水线进行中，当前阶段 N | 每个阶段门控通过后更新 |
+| `done` | 流水线已完成或用户主动结束 | S8 门控通过后；或检测到结束意图 |
+| `paused` | 用户暂停，稍后继续 | 用户明确说"暂停"/"先放一下" |
+
+**状态更新命令**（每次状态变更执行）：
+```bash
+python3 -c "
+import re, pathlib
+p = pathlib.Path('state/projects/<slug>/project.md')
+txt = p.read_text(encoding='utf-8')
+txt = re.sub(r'(?m)^(- \*\*状态\*\*:).*$', r'\1 <新状态>', txt, count=1)
+p.write_text(txt, encoding='utf-8')
+print('状态 → <新状态>')
+"
+```
+
+**结束意图检测**：收到用户消息时，若满足以下任一条件，**在回复前**执行状态更新：
+- 消息含：结束 / 完成了 / 好了 / 不用了 / 先这样 / 收尾 / 结项 / 写完了 / done / finish / wrap up / that's all
+- S8 门控刚通过（`gate_check.py <slug> 8` 返回 PASS）
+- 用户明确说"这个项目完成了"
+
+**结束时必须执行**：
+```bash
+# 1. 更新 project.md 状态字段为 done
+python3 -c "import re,pathlib; p=pathlib.Path('state/projects/<slug>/project.md'); txt=p.read_text(encoding='utf-8'); txt=re.sub(r'(?m)^(- \*\*状态\*\*:).*$', r'\1 done', txt, count=1); p.write_text(txt, encoding='utf-8'); print('状态 → done')"
+
+# 2. 写入 SUMMARY.md 结项行
+python3 -c "
+from datetime import date
+import pathlib
+p = pathlib.Path('state/projects/<slug>/SUMMARY.md')
+p.open('a', encoding='utf-8').write(f'\n## 项目结项 · {date.today()}\n')
+"
+```
+
 **pipeline=research 时**：加载 `pipelines/research.md`，其中包含：
 - 9 阶段科研流水线（§R1）
 - 证据协议（§R2）
