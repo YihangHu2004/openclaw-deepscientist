@@ -161,6 +161,21 @@ Map-Reduce 处理的论文 EV 记录 source_type 标 `map_reduce_full_text`，co
 | 摘要预读后判断不需升级 | abstract_only | low | ❌（辅助引用） |
 | 全文不可达，强制降级 | abstract_only | low | ❌（辅助引用） |
 
+**每篇论文 EV 提取目标**（按精读深度，目标值是期望，不是上限）：
+
+| 论文类型 | 精读深度 | EV 目标 | 说明 |
+|---------|---------|--------|------|
+| 摘要级（abstract_only） | 摘要 | 1–2 条 | 辅助引用，不计入精读门有效证据 |
+| 普通全文（8–12页） | 全文 | 3–6 条 | 方法来源 + 核心实验数据 + 局限性 |
+| 奠基性论文（seminal） | 全文精读 | 5–8 条 | 必须覆盖核心主张、方法框架、关键实验 |
+| 方法类论文（method_*） | 全文精读 | 4–7 条 | 算法细节 + 各 baseline 对比数值各 1 条 |
+| Survey / 综述 | 全文精读 | 10–20 条 | 每个子领域主张各提取，不得因"够了"提前停 |
+| 短文 / Workshop paper | 全文 | 2–3 条 | |
+
+**整体健康检查**（每轮精读结束后自检）：
+- 全文精读论文数 × 3 ≤ 总 EV 数 → 正常
+- 全文精读论文数 × 3 > 总 EV 数 → 说明提取过少，返回漏提论文补充
+
 每篇论文至少提取 **2 条** EV 记录（至少 1 条 confidence ≥ medium）。
 
 ---
@@ -203,7 +218,7 @@ Map-Reduce 处理的论文 EV 记录 source_type 标 `map_reduce_full_text`，co
 |------|------|
 | 维度覆盖 | seminal / sota / challenge / recent 各 ≥ 1 篇精读，每个 method_* 流派 ≥ 1 篇精读 |
 | 结构化笔记 | 每篇 4 字段非空（研究问题/核心方法/主要结果/局限性） |
-| EV 记录 | evidence.json 中每篇 ≥ 2 条 EV，共 ≥ 10 条（**下限，非目标**；survey 论文单篇应达 15–30 条） |
+| EV 记录 | 每篇全文精读 ≥ 2 条 EV；总 EV 数 ≥ 全文精读论文数 × 3（**健康检查**，低于此值说明提取不足） |
 | EV 来源 | EV 记录 source_type 不得全为 abstract_only |
 | EV 验证 | verified = true（来自实际抓取，非内存重建） |
 | [MATERIAL GAP] | 每篇笔记中标注数量记入 SUMMARY.md gap_count |
