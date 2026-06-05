@@ -156,7 +156,9 @@ S2 优先使用 `semantic-scholar` MCP，MCP 不可用时降级 `web_fetch`。S1
 
 ### 前提条件
 
-- [OpenClaw](https://openclaw.ai) 已安装
+> ⚠️ **版本说明**：DeepClaw 基于 **OpenClaw v2026.5.18** 开发与测试，其他版本可能不受支持。建议使用 `npm install -g openclaw@2026.5.18` 安装指定版本。
+
+- [OpenClaw](https://openclaw.ai) v2026.5.18 已安装
 - Python 3.9+（执行层脚本、PPT 生成、HTML 导出）
 - Node.js 18+（DeepClaw UI）
 - （可选）Semantic Scholar API Key：填入 `~/.openclaw/openclaw.json` → `mcp.servers.semantic-scholar.env.SEMANTIC_SCHOLAR_API_KEY`，无 Key 时匿名限速较严
