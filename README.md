@@ -1,6 +1,6 @@
 # DeepClaw
 
-> 深度科研 Agent for [OpenClaw](https://openclaw.ai) — 文献漏斗 + 证据链追踪 + 双模式流水线 + 开题 PPT 生成 + 套磁邮件流水线
+> 深度科研 Agent for [OpenClaw](https://openclaw.ai) — 文献漏斗 + 证据链追踪 + 双模式流水线 + 开题 PPT 生成 + 套磁邮件流水线 + 轨迹记忆系统
 
 ---
 
@@ -67,20 +67,20 @@ report.md §2 第 3 段："该模型准确率达 94.2% [EV-001]"
 
 🟡/🔴 的原始错误句保存在 `hypothesis_audit.original_*` 字段（永不覆盖），修正后的内容更新到 `claim_text` / `report_sentence` / `audit_result`。
 
-**双流同行评审（S8，强制）**：4 位标准评审（主题专家 / 方法专家 / 写作审稿人 / 领域外视角）独立评分，加上 Devil's Advocate 主动寻找逻辑漏洞与竞争性解释。DA-CRITICAL 项阻断评审门。
+**双流同行评审（S8，强制）**：4 位标准评审独立评分，加上 Devil's Advocate 主动寻找逻辑漏洞与竞争性解释。DA 新增**方案可执行性审查**（6项 Yes/No 逐项判定），任意 No → DA-CRITICAL。发现问题修改后必须重新运行 S8，问题路由：内容/论证→S6，引用漂移→S7，文献缺失→S3，方案未定→S5。
 
 ### 验收门
 
 | 阶段 | 验收门 | 关键条件 |
 |------|--------|---------|
-| S1+S2 | 文献覆盖门 | ≥5 篇含摘要；≥1 篇高引（>50） |
-| S3 | 精读完整门 | ≥5 篇结构化笔记；evidence.json ≥10 条 EV |
-| S4 | 综述质量门 | Related Work ≥200 词；Gap ≥3 条 |
-| S5 | 研究计划门 | 假设含可验证指标；≥1 数据集已识别 |
-| S6 | 报告完整门 | 8 个章节齐全；证据覆盖率 ≥80%；[MATERIAL GAP] ≤20% |
-| S7 | 审计完整门 | high EV 全查；unsupported 项已修；审计报告已追加【强制】 |
-| S8 | 评审完整门 | 4 位评审完成评分卡；DA 框架完整；DA-CRITICAL 项已回应【强制】 |
-| S9 | PPT 结构门 | ≥12 张幻灯片；10 类必要页均存在【可选】 |
+| S1+S2 | 文献覆盖门 | 五维度全覆盖（seminal/sota/method×2/challenge/recent）；候选 ≥10 篇；unified_triage 无 pending |
+| S3 | 精读完整门 | 维度全覆盖；总 EV 数 ≥ 全文精读论文数×3；不能全是 abstract_only |
+| S4 | 综述质量门 | Related Work ≥300 词；Gap ≥3 条（各有EV）；对比表 ≥5 行 |
+| S5 | 研究计划门 | 假设含可验证指标；数据集/baseline 具名；**5项可执行性自检全部 Yes**；EV 缺口补齐后才可进 S6 |
+| S6 | 报告完整门 | 8章节齐全；**研究方法含4.1/4.2/4.3子节**；证据覆盖率 ≥80%；[MATERIAL GAP] ≤20%；方案可落地 |
+| S7 | 审计完整门 | 每条 EV **逐字引用原文段落对比**后才执行命令；high EV 全查；忠实率 ≥90%【强制】 |
+| S8 | 评审完整门 | 4位评审完成；**DA 含6项可执行性审查**（Yes/No逐项）；DA-CRITICAL 项已回应；**改进后必须重跑评审**【强制】 |
+| S9 | PPT 结构门 | ≥12 张；必要幻灯片均存在【可选】 |
 
 ### 执行层脚本
 
@@ -93,7 +93,12 @@ scripts/
 ├── ev_manager.py          # 管理 evidence.json（全部证据检查命令，见下）
 ├── evidence_memory.py     # 构建可查询证据缓存，检测 Contradict 冲突关系
 ├── passport.py            # SHA256 内容哈希 + 物料护照验证（跨会话完整性）
-├── session_restore.py     # 跨会话状态恢复卡片
+├── session_restore.py     # 跨会话状态恢复卡片（含 context compaction）
+├── trajectory_logger.py   # Append-only JSONL 轨迹记忆读写 + context compaction
+├── project_reuse.py       # 关键词相似度检索旧项目经验，新项目初始化时自动注入
+├── preflight.py           # 每次 AI 回复前强制前置检查（HARD_STOP / PROCEED）
+├── hard_stop.py           # 部署/解除硬阻断锁
+├── intent_router.py       # 意图路由（research / outreach / heartbeat）
 ├── init_outreach.py       # 初始化套磁项目目录结构
 ├── outreach_manager.py    # 联系人 CRUD + 调研笔记 + 流言板 + 状态追踪
 ├── outreach_gate_check.py # 邮件 G3 质量门（5 项检查）
@@ -169,12 +174,15 @@ python scripts/session_restore.py <slug>
 
 ### MCP 工具层
 
-通过 OpenClaw MCP 协议对接本地与云端计算服务，配置写入 `~/.openclaw/openclaw.json`：
+通过 OpenClaw MCP 协议对接本地与云端计算服务，脚本位于 `mcp_servers/`，配置写入 `~/.openclaw/openclaw.json`：
 
-| MCP Server | 用途 |
-|------------|------|
-| `math` | 本地统计计算（scipy/sympy）— 精确数值 |
-| `wolfram` | Wolfram Alpha LLM API — 自然语言数学/物理问题 |
+| MCP Server | 脚本 | 用途 |
+|------------|------|------|
+| `semantic-scholar` | `mcp_servers/semantic_scholar_tool.py` | Semantic Scholar API（搜索/引用/参考/作者），内置速率控制和429自动重试 |
+| `wolfram` | `mcp_servers/wolfram_tool.py` | Wolfram Alpha LLM API — 自然语言数学/物理问题 |
+| `math` | `mcp_servers/math_tool.py` | 本地精确四则运算 |
+
+S2 优先使用 `semantic-scholar` MCP，MCP 不可用时降级 `web_fetch`。S1 arXiv API 429 时四级降级：重试（线性退避）→ S2 MCP → web_search → arxiv.org 页面路径。
 
 ---
 
@@ -185,7 +193,8 @@ python scripts/session_restore.py <slug>
 - [OpenClaw](https://openclaw.ai) 已安装
 - Python 3.9+（执行层脚本、PPT 生成、HTML 导出）
 - Node.js 18+（DeepClaw UI）
-- （可选）Semantic Scholar API Key：https://api.semanticscholar.org/api-docs/
+- （可选）Semantic Scholar API Key：填入 `~/.openclaw/openclaw.json` → `mcp.servers.semantic-scholar.env.SEMANTIC_SCHOLAR_API_KEY`，无 Key 时匿名限速较严
+- （可选）Wolfram App ID：填入 `mcp.servers.wolfram.env.WOLFRAM_APP_ID`
 
 ### 一键安装（推荐）
 
@@ -332,11 +341,12 @@ bash install.sh        # Mac/Linux
 ## 技术栈
 
 - **Agent 框架**: OpenClaw Workspace 协议（SCIENTIST.md 驱动）
-- **文献数据库**: arXiv API + Semantic Scholar Graph API + Unpaywall
+- **文献数据库**: arXiv API（四级429降级）+ Semantic Scholar MCP + Unpaywall
 - **HTML 提取**: Trafilatura → BeautifulSoup → 正则（三层降级）
 - **PPT 生成**: python-pptx（中文学术模板）
 - **数学计算 MCP**: scipy + sympy + Wolfram Alpha LLM API
-- **DeepClaw UI**: Next.js 15 + React 19 + Tailwind CSS + Node.js 代理服务器
+- **轨迹记忆**: Append-only JSONL ReAct 轨迹 + context compaction + 跨项目经验复用
+- **DeepClaw UI**: Next.js + React + Tailwind CSS + Node.js 代理服务器（端口19000，强制浅色模式）
 
 ---
 
