@@ -19,12 +19,17 @@ The project-local memory files are:
 ```text
 state/projects/<slug>/trajectory_context.md
 state/projects/<slug>/trajectory_memory.jsonl
+state/projects/<slug>/trajectory_summary.md
 ```
 
 `trajectory_context.md` contains reusable workflow priors retrieved from similar
 old projects when the project was initialized.
 
 `trajectory_memory.jsonl` contains this project's own append-only ReAct trace.
+
+`trajectory_summary.md` contains compressed project-local workflow memory. It is
+generated from `trajectory_memory.jsonl` and should be read before the raw recent
+tail when the JSONL trace grows long.
 
 ## Hard Rules
 
@@ -38,6 +43,8 @@ old projects when the project was initialized.
    project-local.
 6. Do not bulk-load huge JSONL logs. Use `get_recent_context()` or stream recent
    records only.
+7. Treat `trajectory_summary.md` as compressed workflow memory only. It is never
+   a replacement for `evidence.json`.
 
 ## Start-Of-Skill Protocol
 
@@ -45,21 +52,23 @@ Before executing a research-stage skill:
 
 1. Identify the active `<slug>`.
 2. Read `state/projects/<slug>/trajectory_context.md` if it exists.
-3. Read the current project's recent trajectory context and log that read as a
+3. Read `state/projects/<slug>/trajectory_summary.md` if it exists.
+4. Read the current project's recent trajectory context and log that read as a
    visible memory step:
 
 ```bash
 python scripts/trajectory_logger.py state/projects/<slug> retrieve \
   --requester-phase "<phase>" \
   --source trajectory_context.md \
+  --source trajectory_summary.md \
   --source trajectory_memory.jsonl \
   --n 5 \
   --output both
 ```
 
-4. Use the retrieved context to avoid repeated failed searches, reuse useful
+5. Use the retrieved context to avoid repeated failed searches, reuse useful
    workflow patterns, and preserve known project-specific constraints.
-5. If the context conflicts with `evidence.json`, `project.md`, or the user's
+6. If the context conflicts with `evidence.json`, `project.md`, or the user's
    latest instruction, prefer the current project files and user instruction.
 
 The command output contains a `MEMORY CHECK CARD`. Surface that card in the
@@ -111,6 +120,55 @@ For a human-facing view of both research actions and memory IO, run:
 
 ```bash
 python scripts/trajectory_logger.py state/projects/<slug> timeline --n 20
+```
+
+## Context Compaction Protocol
+
+When the trajectory JSONL becomes too long for prompt injection, compress old
+steps into a bounded summary and keep a recent raw tail. This follows the same
+principle as coding-agent context compaction: durable summary first, recent
+verbatim context second, raw log preserved for audit.
+
+Run compaction after a long stage, before session handoff, or before using a
+project as reusable memory for future projects:
+
+```bash
+python scripts/trajectory_logger.py state/projects/<slug> compact \
+  --keep-recent 8 \
+  --max-chars 9000 \
+  --output both
+```
+
+This writes:
+
+```text
+state/projects/<slug>/trajectory_summary.md
+```
+
+and appends a visible `Memory_Compact` step to `trajectory_memory.jsonl`.
+
+The command output contains a `CONTEXT COMPRESSION CARD`. Surface that card in
+the interactive reply when compaction is part of the workflow.
+
+For prompt injection after compaction, use:
+
+```bash
+python scripts/trajectory_logger.py state/projects/<slug> compressed \
+  --recent-n 5 \
+  --summary-chars 6000
+```
+
+The compressed context must preserve:
+
+```text
+last known state
+phase-aware progress
+durable decisions
+reusable workflow lessons
+failure/retry patterns
+persistent constraints
+likely next actions
+recent uncompressed tail
 ```
 
 ## New-Project Reuse Protocol

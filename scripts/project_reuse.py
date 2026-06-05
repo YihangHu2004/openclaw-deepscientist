@@ -28,6 +28,12 @@ if hasattr(sys.stderr, "reconfigure"):
 WORKSPACE = Path(__file__).parent.parent
 DEFAULT_PROJECTS_DIR = WORKSPACE / "state" / "projects"
 MEMORY_FILENAME = "trajectory_memory.jsonl"
+SUMMARY_FILENAME = "trajectory_summary.md"
+MEMORY_EVENT_PHASES = {
+    "Memory_Retrieve",
+    "Memory_Store",
+    "Memory_Compact",
+}
 
 STOPWORDS = {
     "the", "and", "for", "with", "from", "that", "this", "into", "about",
@@ -47,6 +53,7 @@ class ReuseCandidate:
     score: float
     shared_keywords: list[str]
     memory_path: Path
+    summary_text: str
     recent_records: list[dict[str, Any]]
 
 
@@ -173,6 +180,8 @@ def compact_record_text(record: dict[str, Any], limit: int = 1200) -> str:
 def recent_trajectory_records(memory_path: Path, n: int = 3) -> list[dict[str, Any]]:
     recent = deque(maxlen=max(n, 0))
     for record in iter_jsonl_records(memory_path):
+        if record.get("phase") in MEMORY_EVENT_PHASES:
+            continue
         recent.append(record)
     return list(recent)
 
@@ -219,6 +228,7 @@ def find_reuse_candidates(
             continue
 
         recent_records = recent_trajectory_records(memory_path, n=recent_n)
+        summary_text = read_text_safe(project_dir / SUMMARY_FILENAME, limit=5000)
         profile = project_profile_text(project_dir, recent_records)
         candidate_keywords = extract_keywords(profile)
         score, shared = score_keywords(query_keywords, candidate_keywords)
@@ -231,6 +241,7 @@ def find_reuse_candidates(
                 score=score,
                 shared_keywords=shared,
                 memory_path=memory_path,
+                summary_text=summary_text,
                 recent_records=recent_records,
             )
         )
@@ -287,6 +298,17 @@ def format_reuse_context(
                 f"shared_keywords={', '.join(candidate.shared_keywords)}",
             ]
         )
+        if candidate.summary_text:
+            summary = candidate.summary_text
+            if len(summary) > 2200:
+                summary = summary[:2200].rstrip() + "\n... [truncated]"
+            blocks.extend(
+                [
+                    "",
+                    "Compressed Trajectory Summary:",
+                    summary,
+                ]
+            )
         if not candidate.recent_records:
             blocks.append("Trajectory Memory: no recent records available.")
             continue

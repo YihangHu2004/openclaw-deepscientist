@@ -17,10 +17,11 @@ WORKSPACE = Path(__file__).parent.parent
 STATE_DIR  = WORKSPACE / "state" / "projects"
 
 try:
-    from trajectory_logger import TrajectoryLogger, format_memory_check_card
+    from trajectory_logger import TrajectoryLogger, format_memory_check_card, SUMMARY_FILENAME
 except Exception:  # pragma: no cover - restore must not depend on memory
     TrajectoryLogger = None
     format_memory_check_card = None
+    SUMMARY_FILENAME = "trajectory_summary.md"
 
 STAGE_NAMES = {
     1: "arxiv-search",
@@ -112,14 +113,26 @@ def load_trajectory_prompt_context(proj_dir: Path, n: int = 3) -> str:
         except Exception as exc:
             blocks.append(f"Reusable Project Trajectory Context: unavailable ({exc}).")
 
+    summary_path = proj_dir / SUMMARY_FILENAME
+    if summary_path.exists():
+        try:
+            summary_context = summary_path.read_text(encoding="utf-8-sig", errors="replace")
+            files_read.append(str(summary_path.relative_to(WORKSPACE)))
+            if len(summary_context) > 3600:
+                summary_context = summary_context[:3600].rstrip() + "\n... [truncated]"
+            blocks.append("Compressed Current Project Trajectory Summary:")
+            blocks.append(summary_context)
+        except Exception as exc:
+            blocks.append(f"Compressed Current Project Trajectory Summary: unavailable ({exc}).")
+
     if TrajectoryLogger is None:
         blocks.append("Trajectory Memory: unavailable.")
         return "\n\n".join(blocks)
     try:
         logger = TrajectoryLogger(proj_dir)
         files_read.append(str((proj_dir / "trajectory_memory.jsonl").relative_to(WORKSPACE)))
-        recent_records = logger.get_recent_records(n=n)
-        context = logger.get_recent_context(n=n)
+        recent_records = logger.get_recent_records(n=n, include_memory_events=False)
+        context = logger.get_recent_context(n=n, include_memory_events=False)
         if len(context) > 2400:
             context = context[:2400].rstrip() + "\n... [truncated]"
         blocks.append("Current Project Trajectory Memory:")

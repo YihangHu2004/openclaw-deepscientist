@@ -14,7 +14,7 @@ import json
 import os
 import sys
 import argparse
-from collections import deque
+from collections import Counter, deque
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
@@ -27,8 +27,10 @@ if hasattr(sys.stderr, "reconfigure"):
 
 
 MEMORY_FILENAME = "trajectory_memory.jsonl"
+SUMMARY_FILENAME = "trajectory_summary.md"
 MEMORY_RETRIEVE_PHASE = "Memory_Retrieve"
 MEMORY_STORE_PHASE = "Memory_Store"
+MEMORY_COMPACT_PHASE = "Memory_Compact"
 
 
 def _clip(text: str, limit: int = 1600) -> str:
@@ -114,6 +116,69 @@ def format_memory_store_card(record: Dict[str, Any], store_record: Optional[Dict
         f"Observation: {_clip(store_record.get('observation', ''), limit=700)}",
     ])
     return "\n".join(lines)
+
+
+def format_memory_compact_card(record: Dict[str, Any], summary_path: Path, preview: str = "") -> str:
+    """Format a Memory_Compact record as a visible compression card."""
+
+    action = record.get("action") if isinstance(record.get("action"), dict) else {}
+    params = action.get("parameters", {}) if isinstance(action.get("parameters"), dict) else {}
+    lines = [
+        "CONTEXT COMPRESSION CARD",
+        "",
+        f"Memory step: {record.get('phase', '')} step={record.get('step', '')}",
+        f"Action: {action.get('tool_name', '')}",
+        f"Summary file: {summary_path.name}",
+        f"Records scanned: {params.get('records_scanned', 0)}",
+        f"Recent tail kept: {params.get('keep_recent', 0)}",
+        f"Max summary chars: {params.get('max_chars', 0)}",
+        "",
+        "Compression policy:",
+        "- preserve raw trajectory_memory.jsonl as append-only audit log",
+        "- compact old trajectory into phase-aware workflow summary",
+        "- keep recent uncompressed tail for local continuity",
+        "- use compressed memory as workflow prior only, never as evidence",
+    ]
+    if preview:
+        lines.extend(["", "Summary preview:", _clip(preview, limit=1600)])
+    return "\n".join(lines)
+
+
+def _record_action(record: Dict[str, Any]) -> Dict[str, Any]:
+    action = record.get("action")
+    return action if isinstance(action, dict) else {}
+
+
+def _record_text(record: Dict[str, Any]) -> str:
+    action = _record_action(record)
+    params = action.get("parameters", {}) if isinstance(action.get("parameters"), dict) else {}
+    return "\n".join(
+        str(part)
+        for part in [
+            record.get("phase", ""),
+            record.get("thought", ""),
+            action.get("tool_name", ""),
+            _json_compact(params, limit=500),
+            record.get("observation", ""),
+            record.get("reflection", ""),
+        ]
+        if part
+    )
+
+
+def _short_record_line(record: Dict[str, Any], limit: int = 260) -> str:
+    action = _record_action(record)
+    text = record.get("reflection") or record.get("observation") or record.get("thought") or ""
+    return (
+        f"[{record.get('timestamp', '')}] {record.get('phase', '')} "
+        f"step={record.get('step', '')} action={action.get('tool_name', '')}: "
+        f"{_clip(text, limit=limit)}"
+    )
+
+
+def _contains_any(text: str, needles: tuple[str, ...]) -> bool:
+    lowered = text.lower()
+    return any(item in lowered for item in needles)
 
 
 class TrajectoryLoggerError(RuntimeError):
@@ -216,13 +281,22 @@ class TrajectoryLogger:
 
         return record
 
-    def get_recent_context(self, phase: Optional[str] = None, n: int = 5) -> str:
+    def get_recent_context(
+        self,
+        phase: Optional[str] = None,
+        n: int = 5,
+        include_memory_events: bool = True,
+    ) -> str:
         """Return the latest n trajectory records as prompt-ready plain text."""
 
         if n <= 0:
             return "Trajectory Memory: no records requested."
 
-        recent = self.get_recent_records(phase=phase, n=n)
+        recent = self.get_recent_records(
+            phase=phase,
+            n=n,
+            include_memory_events=include_memory_events,
+        )
 
         if not recent:
             phase_label = f" for phase {phase}" if phase else ""
@@ -267,7 +341,11 @@ class TrajectoryLogger:
         recent: Deque[Dict[str, Any]] = deque(maxlen=n)
         for record in self._iter_records():
             record_phase = record.get("phase")
-            if not include_memory_events and record_phase in {MEMORY_RETRIEVE_PHASE, MEMORY_STORE_PHASE}:
+            if not include_memory_events and record_phase in {
+                MEMORY_RETRIEVE_PHASE,
+                MEMORY_STORE_PHASE,
+                MEMORY_COMPACT_PHASE,
+            }:
                 continue
             if phase is None or record_phase == phase:
                 recent.append(record)
@@ -344,7 +422,15 @@ class TrajectoryLogger:
             action = record.get("action") if isinstance(record.get("action"), dict) else {}
             params = action.get("parameters", {}) if isinstance(action.get("parameters"), dict) else {}
             phase = record.get("phase", "")
-            label = "memory read" if phase == MEMORY_RETRIEVE_PHASE else "memory write" if phase == MEMORY_STORE_PHASE else "stage action"
+            label = (
+                "memory read"
+                if phase == MEMORY_RETRIEVE_PHASE
+                else "memory write"
+                if phase == MEMORY_STORE_PHASE
+                else "memory compact"
+                if phase == MEMORY_COMPACT_PHASE
+                else "stage action"
+            )
             detail = record.get("observation", "")
             if phase == MEMORY_RETRIEVE_PHASE:
                 detail = (
@@ -357,6 +443,12 @@ class TrajectoryLogger:
                     f"stored={params.get('stored_phase', '')} step={params.get('stored_step', '')}; "
                     f"action={params.get('stored_action', '')}"
                 )
+            elif phase == MEMORY_COMPACT_PHASE:
+                detail = (
+                    f"summary={params.get('summary_file', SUMMARY_FILENAME)}; "
+                    f"records={params.get('records_scanned', 0)}; "
+                    f"tail={params.get('keep_recent', 0)}"
+                )
             blocks.append(
                 "\n".join([
                     f"- [{record.get('timestamp', '')}] {phase} step={record.get('step', '')} ({label})",
@@ -365,6 +457,308 @@ class TrajectoryLogger:
                 ])
             )
         return "\n\n".join(blocks)
+
+    def get_compressed_context(
+        self,
+        recent_n: int = 5,
+        summary_chars: int = 6000,
+        include_recent: bool = True,
+    ) -> str:
+        """
+        Return prompt-ready compressed context plus a recent uncompressed tail.
+
+        This mirrors the context-compaction pattern used by coding agents:
+        old interaction history is summarized into a bounded durable file, while
+        the latest raw steps are kept verbatim for local continuity.
+        """
+
+        blocks: list[str] = []
+        summary_path = self.workspace_dir / SUMMARY_FILENAME
+        if summary_path.exists():
+            try:
+                summary = summary_path.read_text(encoding="utf-8-sig", errors="replace")
+                if len(summary) > summary_chars:
+                    summary = summary[:summary_chars].rstrip() + "\n... [truncated]"
+                blocks.extend(["Compressed Trajectory Memory:", summary])
+            except OSError as exc:
+                blocks.append(f"Compressed Trajectory Memory: unavailable ({exc}).")
+        else:
+            blocks.append("Compressed Trajectory Memory: no trajectory_summary.md found.")
+
+        if include_recent:
+            blocks.extend(
+                [
+                    "",
+                    "Recent Uncompressed Trajectory Tail:",
+                    self.get_recent_context(n=recent_n, include_memory_events=False),
+                ]
+            )
+        return "\n\n".join(blocks)
+
+    def compact_context(
+        self,
+        keep_recent: int = 8,
+        max_records: Optional[int] = None,
+        max_chars: int = 9000,
+        phase: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Stream trajectory_memory.jsonl and write trajectory_summary.md.
+
+        The compactor is deterministic and extractive: it does not call an LLM.
+        It keeps counts, latest phase states, durable lessons, failure patterns,
+        constraints, and a small raw tail. Raw JSONL remains append-only.
+        """
+
+        if keep_recent < 0:
+            raise ValueError("keep_recent must be >= 0")
+        if max_records is not None and max_records <= 0:
+            raise ValueError("max_records must be positive when provided")
+
+        summary_path = self.workspace_dir / SUMMARY_FILENAME
+        phase_stats: Dict[str, Dict[str, Any]] = {}
+        action_counts: Counter[str] = Counter()
+        memory_io_counts: Counter[str] = Counter()
+        durable_decisions: Deque[str] = deque(maxlen=12)
+        workflow_lessons: Deque[str] = deque(maxlen=16)
+        failure_patterns: Deque[str] = deque(maxlen=12)
+        constraints: Deque[str] = deque(maxlen=12)
+        next_actions: Deque[str] = deque(maxlen=10)
+        recent_tail: Deque[Dict[str, Any]] = deque(maxlen=keep_recent)
+
+        total_seen = 0
+        total_used = 0
+        last_record: Optional[Dict[str, Any]] = None
+        last_meaningful_record: Optional[Dict[str, Any]] = None
+        memory_event_phases = {
+            MEMORY_RETRIEVE_PHASE,
+            MEMORY_STORE_PHASE,
+            MEMORY_COMPACT_PHASE,
+        }
+
+        for record in self._iter_records():
+            total_seen += 1
+            if phase is not None and record.get("phase") != phase:
+                continue
+            if max_records is not None and total_used >= max_records:
+                break
+
+            total_used += 1
+            last_record = record
+            recent_tail.append(record)
+            record_phase = str(record.get("phase", ""))
+            is_memory_event = record_phase in memory_event_phases
+            if not is_memory_event:
+                last_meaningful_record = record
+            action = _record_action(record)
+            action_name = str(action.get("tool_name", ""))
+            if action_name and not is_memory_event:
+                action_counts[action_name] += 1
+            if is_memory_event:
+                memory_io_counts[record_phase] += 1
+
+            stats = phase_stats.setdefault(
+                record_phase,
+                {
+                    "records": 0,
+                    "last_step": "",
+                    "last_timestamp": "",
+                    "last_action": "",
+                    "last_observation": "",
+                    "last_reflection": "",
+                },
+            )
+            stats["records"] += 1
+            stats["last_step"] = record.get("step", "")
+            stats["last_timestamp"] = record.get("timestamp", "")
+            stats["last_action"] = action_name
+            stats["last_observation"] = _clip(record.get("observation", ""), limit=220)
+            stats["last_reflection"] = _clip(record.get("reflection", ""), limit=220)
+
+            text = _record_text(record)
+            line = _short_record_line(record)
+            if is_memory_event:
+                continue
+            if _contains_any(
+                text,
+                (
+                    "decide",
+                    "decision",
+                    "selected",
+                    "choose",
+                    "chosen",
+                    "gate passed",
+                    "initialized",
+                    "created",
+                    "确定",
+                    "选择",
+                    "门控通过",
+                    "初始化完成",
+                ),
+            ):
+                durable_decisions.append(line)
+            if record.get("reflection"):
+                workflow_lessons.append(line)
+            if _contains_any(
+                text,
+                (
+                    "error",
+                    "failed",
+                    "failure",
+                    "timeout",
+                    "empty",
+                    "no result",
+                    "no reusable",
+                    "unsupported",
+                    "drifted",
+                    "blocked",
+                    "报错",
+                    "失败",
+                    "超时",
+                    "无结果",
+                    "不支持",
+                ),
+            ):
+                failure_patterns.append(line)
+            if _contains_any(
+                text,
+                (
+                    "must",
+                    "never",
+                    "constraint",
+                    "require",
+                    "evidence.json",
+                    "workflow prior",
+                    "do not",
+                    "必须",
+                    "不能",
+                    "约束",
+                    "证据",
+                ),
+            ):
+                constraints.append(line)
+            if _contains_any(
+                text,
+                (
+                    "next",
+                    "continue",
+                    "pending",
+                    "todo",
+                    "resume",
+                    "进入",
+                    "下一步",
+                    "继续",
+                    "待",
+                ),
+            ):
+                next_actions.append(line)
+
+        generated_at = datetime.now().replace(microsecond=0).isoformat()
+        lines = [
+            "# Trajectory Context Summary",
+            "",
+            f"Generated: {generated_at}",
+            f"Source: {MEMORY_FILENAME}",
+            f"Records scanned: {total_seen}",
+            f"Records summarized: {total_used}",
+            f"Phase filter: {phase or 'all'}",
+            "",
+            "Use policy:",
+            "- This file is compressed workflow memory, not scientific evidence.",
+            "- Keep raw trajectory_memory.jsonl as the append-only audit log.",
+            "- Use this summary to restore intent, constraints, failed attempts, and next workflow moves.",
+            "- Claims about papers, datasets, metrics, or citations still require evidence.json.",
+        ]
+
+        display_last_record = last_meaningful_record or last_record
+        if display_last_record:
+            action = _record_action(display_last_record)
+            lines.extend(
+                [
+                    "",
+                    "## Last Known State",
+                    f"- timestamp: {display_last_record.get('timestamp', '')}",
+                    f"- phase: {display_last_record.get('phase', '')}",
+                    f"- step: {display_last_record.get('step', '')}",
+                    f"- action: {action.get('tool_name', '')}",
+                    f"- observation: {_clip(display_last_record.get('observation', ''), limit=420)}",
+                ]
+            )
+            if display_last_record.get("reflection"):
+                lines.append(f"- reflection: {_clip(display_last_record.get('reflection', ''), limit=420)}")
+
+        lines.extend(["", "## Phase-Aware Progress"])
+        if phase_stats:
+            progress_items = 0
+            for item_phase, stats in sorted(phase_stats.items()):
+                if item_phase in memory_event_phases:
+                    continue
+                progress_items += 1
+                lines.append(
+                    f"- {item_phase}: records={stats['records']}, "
+                    f"last_step={stats['last_step']}, last_action={stats['last_action']}"
+                )
+                if stats["last_observation"]:
+                    lines.append(f"  last_observation: {stats['last_observation']}")
+                if stats["last_reflection"]:
+                    lines.append(f"  last_reflection: {stats['last_reflection']}")
+            if progress_items == 0:
+                lines.append("- no non-memory stage records available")
+        else:
+            lines.append("- no records available")
+
+        if action_counts:
+            lines.extend(["", "## Tool/Action Frequency"])
+            for name, count in action_counts.most_common(12):
+                lines.append(f"- {name}: {count}")
+
+        if memory_io_counts:
+            lines.extend(["", "## Memory IO Summary"])
+            for name, count in memory_io_counts.most_common():
+                lines.append(f"- {name}: {count}")
+
+        def add_section(title: str, items: Deque[str]) -> None:
+            lines.extend(["", f"## {title}"])
+            if items:
+                lines.extend(f"- {item}" for item in items)
+            else:
+                lines.append("- none captured")
+
+        add_section("Durable Decisions", durable_decisions)
+        add_section("Reusable Workflow Lessons", workflow_lessons)
+        add_section("Failure And Retry Patterns", failure_patterns)
+        add_section("Persistent Constraints", constraints)
+        add_section("Likely Next Actions", next_actions)
+
+        lines.extend(["", "## Recent Uncompressed Tail"])
+        if recent_tail:
+            lines.extend(f"- {_short_record_line(record, limit=300)}" for record in recent_tail)
+        else:
+            lines.append("- none")
+
+        summary = "\n".join(lines).strip() + "\n"
+        if len(summary) > max_chars:
+            summary = summary[:max_chars].rstrip() + "\n... [truncated]\n"
+
+        tmp_path = summary_path.with_suffix(summary_path.suffix + ".tmp")
+        try:
+            tmp_path.write_text(summary, encoding="utf-8", newline="\n")
+            tmp_path.replace(summary_path)
+        except OSError as exc:
+            raise TrajectoryLoggerError(f"failed to write {SUMMARY_FILENAME}: {exc}") from exc
+
+        return {
+            "summary_path": summary_path,
+            "summary": summary,
+            "generated_at": generated_at,
+            "records_seen": total_seen,
+            "records_summarized": total_used,
+            "phase_count": len(phase_stats),
+            "keep_recent": keep_recent,
+            "max_chars": max_chars,
+            "phase_filter": phase,
+            "last_state": display_last_record,
+        }
 
     def get_last_state(self) -> Optional[Dict[str, Any]]:
         """Return the last valid JSONL record, or None if memory is empty."""
@@ -491,6 +885,38 @@ def main() -> None:
     )
     timeline_parser.add_argument("--n", type=int, default=20)
 
+    compressed_parser = subparsers.add_parser(
+        "compressed",
+        help="Print trajectory_summary.md plus a recent uncompressed tail.",
+    )
+    compressed_parser.add_argument("--recent-n", type=int, default=5)
+    compressed_parser.add_argument("--summary-chars", type=int, default=6000)
+    compressed_parser.add_argument(
+        "--no-recent",
+        action="store_true",
+        help="Only print trajectory_summary.md, without recent JSONL tail.",
+    )
+
+    compact_parser = subparsers.add_parser(
+        "compact",
+        help="Compress long trajectory memory into trajectory_summary.md.",
+    )
+    compact_parser.add_argument("--keep-recent", type=int, default=8)
+    compact_parser.add_argument("--max-records", type=int, default=None)
+    compact_parser.add_argument("--max-chars", type=int, default=9000)
+    compact_parser.add_argument("--phase", default=None)
+    compact_parser.add_argument(
+        "--no-log-event",
+        action="store_true",
+        help="Write trajectory_summary.md without appending a Memory_Compact record.",
+    )
+    compact_parser.add_argument(
+        "--output",
+        choices=["card", "json", "both"],
+        default="both",
+        help="Output format for the compaction event.",
+    )
+
     subparsers.add_parser("last", help="Print the last valid JSONL record.")
 
     log_parser = subparsers.add_parser("log", help="Append one trajectory step.")
@@ -557,6 +983,75 @@ def main() -> None:
 
     if args.command == "timeline":
         print(logger.get_timeline_context(n=args.n))
+        return
+
+    if args.command == "compressed":
+        print(
+            logger.get_compressed_context(
+                recent_n=args.recent_n,
+                summary_chars=args.summary_chars,
+                include_recent=not args.no_recent,
+            )
+        )
+        return
+
+    if args.command == "compact":
+        result = logger.compact_context(
+            keep_recent=args.keep_recent,
+            max_records=args.max_records,
+            max_chars=args.max_chars,
+            phase=args.phase,
+        )
+        compact_record = None
+        if not args.no_log_event:
+            compact_record = logger.log_step(
+                phase=MEMORY_COMPACT_PHASE,
+                step=logger.get_next_step(MEMORY_COMPACT_PHASE),
+                thought=(
+                    "Compress older trajectory memory into a bounded summary "
+                    "while preserving the raw append-only JSONL log."
+                ),
+                action_name="trajectory_memory.compact",
+                action_params={
+                    "source_file": MEMORY_FILENAME,
+                    "summary_file": SUMMARY_FILENAME,
+                    "records_scanned": result["records_seen"],
+                    "records_summarized": result["records_summarized"],
+                    "phase_count": result["phase_count"],
+                    "keep_recent": result["keep_recent"],
+                    "max_chars": result["max_chars"],
+                    "phase_filter": result["phase_filter"],
+                },
+                observation=(
+                    f"Wrote {SUMMARY_FILENAME} from {result['records_summarized']} "
+                    f"trajectory record(s); kept {result['keep_recent']} recent raw tail item(s)."
+                ),
+                reflection=(
+                    "Future restore/reuse should read trajectory_summary.md first, "
+                    "then append recent uncompressed trajectory context."
+                ),
+            )
+        if args.output in ("card", "both"):
+            if compact_record:
+                print(
+                    format_memory_compact_card(
+                        compact_record,
+                        summary_path=result["summary_path"],
+                        preview=result["summary"],
+                    )
+                )
+            else:
+                print(f"Wrote {result['summary_path']}")
+                print(_clip(result["summary"], limit=1600))
+        if args.output == "both":
+            print("\n--- JSON ---")
+        if args.output in ("json", "both"):
+            printable = dict(result)
+            printable["summary_path"] = str(printable["summary_path"])
+            print(json.dumps({
+                "compaction": printable,
+                "memory_compact_record": compact_record,
+            }, ensure_ascii=False, indent=2))
         return
 
     if args.command == "last":
